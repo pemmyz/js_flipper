@@ -22,9 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let gameState = 'launch';
     let showHelp = false;
     
-    // --- MODIFIED --- Physics constants adjusted for slower ball movement.
-    const GRAVITY = 0.15;        // Lower gravity makes the ball feel heavier and fall slower.
-    const FRICTION = 0.995;      // More friction (lower number) slows the ball down faster.
+    const GRAVITY = 0.15;
+    const FRICTION = 0.995;
     const BOUNCE_FACTOR = 0.6;
     const BALL_RADIUS = 10;
     const BUMPER_RADIUS = 10;
@@ -140,7 +139,6 @@ document.addEventListener('DOMContentLoaded', () => {
             x: PLAYFIELD_WIDTH + CHUTE_WIDTH / 2,
             y: CANVAS_HEIGHT - 30,
             width: 20, height: 50,
-            // --- MODIFIED --- Reduced maxPower for a much softer launch.
             power: 0, maxPower: 20, charging: false
         };
     }
@@ -189,25 +187,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Game Logic (Update) ---
     function update() {
         if (showHelp || gameState === 'gameOver') return;
-
         if (gameState === 'launch') {
             if (launcher.charging && launcher.power < launcher.maxPower) launcher.power += 1;
             ball.y = launcher.y - launcher.power;
             return;
         }
-
         if (gameState === 'in_chute') {
             ball.vy += GRAVITY;
             ball.y += ball.vy;
             ball.x = launcher.x;
             if (ball.y < 100 && ball.vy < 0) {
                 gameState = 'playing';
-                ball.vx = -4; // Slightly slower entry speed
+                ball.vx = -4;
             }
             if (ball.y > CANVAS_HEIGHT) loseBall();
             return;
         }
-
         if (gameState === 'playing') {
             ball.vy += GRAVITY;
             ball.vx *= FRICTION;
@@ -266,19 +261,52 @@ document.addEventListener('DOMContentLoaded', () => {
             if (flipper.active && Math.abs(flipper.angle - targetAngle) < flipper.speed) playSound('flipper', 0.2);
         }
     }
+
+    // --- MODIFIED --- This is the new, robust flipper collision function.
     function handleFlipperCollision(flipper) {
+        // 1. Get the flipper's geometry as a line segment
         const length = flipper.isRight ? -flipper.length : flipper.length;
-        const endX = flipper.x + Math.cos(flipper.angle) * length;
-        const endY = flipper.y + Math.sin(flipper.angle) * length;
-        const dist = Math.hypot(ball.x - endX, ball.y - endY);
+        const x1 = flipper.x;
+        const y1 = flipper.y;
+        const x2 = x1 + Math.cos(flipper.angle) * length;
+        const y2 = y1 + Math.sin(flipper.angle) * length;
+
+        // 2. Find the closest point on the flipper line segment to the ball
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const lineLengthSq = dx * dx + dy * dy;
+        let t = ((ball.x - x1) * dx + (ball.y - y1) * dy) / lineLengthSq;
+        t = Math.max(0, Math.min(1, t)); // Clamp to the segment
+
+        const closestX = x1 + t * dx;
+        const closestY = y1 + t * dy;
+        const dist = Math.hypot(ball.x - closestX, ball.y - closestY);
+
+        // 3. Check for collision
         if (dist < ball.radius + flipper.width / 2) {
-            const flipperVelocity = (flipper.activeAngle - flipper.baseAngle) * flipper.speed;
-            // --- MODIFIED --- Reduced the force of the flipper hit.
-            ball.vy = -12 - Math.random() * 3 - Math.abs(flipperVelocity);
-            ball.vx += (ball.x - flipper.x) * 0.1;
             playSound('bounce', 0.8);
+            
+            // 4. Position Correction (THE ANTI-TUNNELING STEP)
+            // Push the ball out of the flipper to prevent it from getting stuck.
+            const overlap = (ball.radius + flipper.width / 2) - dist;
+            const normalX = ball.x - closestX;
+            const normalY = ball.y - closestY;
+            const magnitude = Math.hypot(normalX, normalY) || 1;
+            ball.x += (normalX / magnitude) * overlap;
+            ball.y += (normalY / magnitude) * overlap;
+
+            // 5. Apply Hit Velocity
+            // Give the ball a strong, consistent upward velocity, with some variation.
+            ball.vy = -12 - Math.random() * 3;
+            // Add extra force if the flipper is actively moving upwards.
+            if (flipper.active) {
+                ball.vy -= flipper.speed * 5;
+            }
+            // Add some horizontal "spin" based on where the ball hit the flipper.
+            ball.vx += (ball.x - flipper.x) * 0.05;
         }
     }
+
     function handleSlopeCollisions() {
         slopes.forEach(slope => {
             const dx = slope.x2 - slope.x1;
@@ -305,6 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
     function loseBall() {
         playSound('lose_ball');
         ballsLeft--;
@@ -312,11 +341,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (ballsLeft <= 0) endGame();
         else resetBall();
     }
+
     function endGame() {
         gameState = 'gameOver';
         finalScoreEl.textContent = score;
         gameOverScreen.classList.remove('hidden');
     }
+
     function updateUI() {
         scoreEl.textContent = score;
         attemptsEl.textContent = ballsLeft;
