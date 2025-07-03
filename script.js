@@ -31,6 +31,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const CHUTE_WIDTH = 50;
     const PLAYFIELD_WIDTH = CANVAS_WIDTH - CHUTE_WIDTH;
 
+    const FLIPPER_Y_OFFSET = 60;
+    const FLIPPER_LENGTH = 85;
+    const FLIPPER_GAP = 100;
+    const FLIPPER_REST_ANGLE = Math.PI / 7;
+    const FLIPPER_SWING_ANGLE = Math.PI / 3;
+
     // --- Sound Effects (Unchanged) ---
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     function playSound(type, volume = 0.3) {
@@ -91,9 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ball = {
             x: PLAYFIELD_WIDTH + CHUTE_WIDTH / 2,
             y: launcher.y,
-            radius: BALL_RADIUS,
-            vx: 0,
-            vy: 0,
+            radius: BALL_RADIUS, vx: 0, vy: 0,
         };
         launcher.power = 0;
         gameState = 'launch';
@@ -113,59 +117,55 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function createFlippers() {
-        const flipperBaseY = CANVAS_HEIGHT - 50;
-        const flipperLength = 85;
+        const flipperBaseY = CANVAS_HEIGHT - FLIPPER_Y_OFFSET;
         const flipperSpeed = 0.4;
-        const flipperGap = 50;
-        
+        const leftPivotX = PLAYFIELD_WIDTH / 2 - FLIPPER_GAP / 2;
+        const rightPivotX = PLAYFIELD_WIDTH / 2 + FLIPPER_GAP / 2;
+
         leftFlipper = {
-            x: PLAYFIELD_WIDTH / 2 - flipperGap, y: flipperBaseY,
-            length: flipperLength, angle: Math.PI / 6,
-            baseAngle: Math.PI / 6, activeAngle: -Math.PI / 6,
-            speed: flipperSpeed, active: false,
-            width: 15, isRight: false
+            x: leftPivotX, y: flipperBaseY,
+            length: FLIPPER_LENGTH,
+            baseAngle: FLIPPER_REST_ANGLE,
+            activeAngle: FLIPPER_REST_ANGLE - FLIPPER_SWING_ANGLE,
+            angle: FLIPPER_REST_ANGLE,
+            speed: flipperSpeed, active: false, width: 15, isRight: false
         };
         rightFlipper = {
-            x: PLAYFIELD_WIDTH / 2 + flipperGap, y: flipperBaseY,
-            length: flipperLength,
-            baseAngle: Math.PI - Math.PI / 6, activeAngle: Math.PI + Math.PI / 6,
-            speed: flipperSpeed, active: false,
-            width: 15, isRight: true
+            x: rightPivotX, y: flipperBaseY,
+            length: FLIPPER_LENGTH,
+            baseAngle: Math.PI - FLIPPER_REST_ANGLE,
+            activeAngle: Math.PI - FLIPPER_REST_ANGLE + FLIPPER_SWING_ANGLE,
+            angle: Math.PI - FLIPPER_REST_ANGLE,
+            speed: flipperSpeed, active: false, width: 15, isRight: true
         };
+    }
+    
+    function createSlopes() {
+        slopes.length = 0;
+        const slopeStartY = CANVAS_HEIGHT * 0.6;
+        slopes.push({ x1: 0, y1: slopeStartY, x2: leftFlipper.x, y2: leftFlipper.y });
+        slopes.push({ x1: PLAYFIELD_WIDTH, y1: slopeStartY, x2: rightFlipper.x, y2: rightFlipper.y });
     }
     
     function createLauncher() {
         launcher = {
             x: PLAYFIELD_WIDTH + CHUTE_WIDTH / 2,
             y: CANVAS_HEIGHT - 30,
-            width: 20, height: 50,
-            power: 0, maxPower: 20, charging: false
+            width: 20, height: 50, power: 0, maxPower: 20, charging: false
         };
     }
     
-    function createSlopes() {
-        slopes.length = 0;
-        slopes.push({ x1: 0, y1: 500, x2: leftFlipper.x, y2: leftFlipper.y });
-        slopes.push({ x1: PLAYFIELD_WIDTH, y1: 500, x2: rightFlipper.x, y2: rightFlipper.y });
-    }
-
     function toggleHelp() {
         showHelp = !showHelp;
         helpLegend.classList.toggle('hidden');
     }
 
-    // --- Input Handling ---
     window.addEventListener('keydown', (e) => {
-        if (e.code === 'KeyH') {
-            toggleHelp();
-            return;
-        }
+        if (e.code === 'KeyH') { toggleHelp(); return; }
         if (showHelp) return;
         if (e.code === 'ArrowLeft') leftFlipper.active = true;
         if (e.code === 'ArrowRight') rightFlipper.active = true;
-        if (e.code === 'Space' && gameState === 'launch') {
-            launcher.charging = true;
-        }
+        if (e.code === 'Space' && gameState === 'launch') launcher.charging = true;
     });
 
     window.addEventListener('keyup', (e) => {
@@ -183,8 +183,6 @@ document.addEventListener('DOMContentLoaded', () => {
     restartButton.addEventListener('click', initializeGame);
     closeHelpButton.addEventListener('click', toggleHelp);
 
-
-    // --- Game Logic (Update) ---
     function update() {
         if (showHelp || gameState === 'gameOver') return;
         if (gameState === 'launch') {
@@ -256,53 +254,43 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateFlipper(flipper) {
         const targetAngle = flipper.active ? flipper.activeAngle : flipper.baseAngle;
         if (Math.abs(flipper.angle - targetAngle) > 0.01) {
-            if (flipper.angle < targetAngle) flipper.angle += flipper.speed;
-            else flipper.angle -= flipper.speed;
+            flipper.angle += (targetAngle > flipper.angle ? 1 : -1) * flipper.speed;
             if (flipper.active && Math.abs(flipper.angle - targetAngle) < flipper.speed) playSound('flipper', 0.2);
         }
     }
 
-    // --- MODIFIED --- This is the new, robust flipper collision function.
+    // --- MODIFIED --- This function now correctly calculates the line segment for both flippers.
     function handleFlipperCollision(flipper) {
-        // 1. Get the flipper's geometry as a line segment
-        const length = flipper.isRight ? -flipper.length : flipper.length;
         const x1 = flipper.x;
         const y1 = flipper.y;
-        const x2 = x1 + Math.cos(flipper.angle) * length;
-        const y2 = y1 + Math.sin(flipper.angle) * length;
-
-        // 2. Find the closest point on the flipper line segment to the ball
+        
+        // Calculate the endpoint based on whether it's the left or right flipper
+        const length = flipper.isRight ? -flipper.length : flipper.length;
+        const x2 = x1 + Math.cos(flipper.angle) * flipper.length;
+        const y2 = y1 + Math.sin(flipper.angle) * flipper.length;
+        
         const dx = x2 - x1;
         const dy = y2 - y1;
         const lineLengthSq = dx * dx + dy * dy;
         let t = ((ball.x - x1) * dx + (ball.y - y1) * dy) / lineLengthSq;
-        t = Math.max(0, Math.min(1, t)); // Clamp to the segment
+        t = Math.max(0, Math.min(1, t));
 
         const closestX = x1 + t * dx;
         const closestY = y1 + t * dy;
         const dist = Math.hypot(ball.x - closestX, ball.y - closestY);
 
-        // 3. Check for collision
         if (dist < ball.radius + flipper.width / 2) {
             playSound('bounce', 0.8);
-            
-            // 4. Position Correction (THE ANTI-TUNNELING STEP)
-            // Push the ball out of the flipper to prevent it from getting stuck.
             const overlap = (ball.radius + flipper.width / 2) - dist;
             const normalX = ball.x - closestX;
             const normalY = ball.y - closestY;
             const magnitude = Math.hypot(normalX, normalY) || 1;
             ball.x += (normalX / magnitude) * overlap;
             ball.y += (normalY / magnitude) * overlap;
-
-            // 5. Apply Hit Velocity
-            // Give the ball a strong, consistent upward velocity, with some variation.
             ball.vy = -12 - Math.random() * 3;
-            // Add extra force if the flipper is actively moving upwards.
             if (flipper.active) {
                 ball.vy -= flipper.speed * 5;
             }
-            // Add some horizontal "spin" based on where the ball hit the flipper.
             ball.vx += (ball.x - flipper.x) * 0.05;
         }
     }
@@ -341,19 +329,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (ballsLeft <= 0) endGame();
         else resetBall();
     }
-
     function endGame() {
         gameState = 'gameOver';
         finalScoreEl.textContent = score;
         gameOverScreen.classList.remove('hidden');
     }
-
     function updateUI() {
         scoreEl.textContent = score;
         attemptsEl.textContent = ballsLeft;
     }
 
-    // --- Rendering (Draw) ---
     function draw() {
         ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         drawSlopes();
@@ -373,7 +358,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.shadowBlur = 0;
     }
 
-    // (Unchanged drawing helper functions)
     function drawBumpers() {
         bumpers.forEach(bumper => {
             ctx.beginPath();
@@ -385,13 +369,20 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         ctx.shadowBlur = 0;
     }
+
+    // --- MODIFIED --- This function now correctly draws both flippers pivoting from their base.
     function drawFlipper(flipper) {
         ctx.save();
         ctx.translate(flipper.x, flipper.y);
         ctx.rotate(flipper.angle);
-        const length = flipper.isRight ? -flipper.length : flipper.length;
+
+        // Draw the rectangle starting from the pivot point (0,0)
+        // For the right flipper, we draw with a negative x-coordinate to extend leftwards.
+        const x = flipper.isRight ? -flipper.length : 0;
+        
         ctx.beginPath();
-        ctx.rect(0, -flipper.width / 2, length, flipper.width);
+        ctx.rect(x, -flipper.width / 2, flipper.length, flipper.width);
+        
         ctx.fillStyle = '#bbbbbb';
         ctx.shadowColor = '#fff';
         ctx.shadowBlur = 10;
@@ -399,6 +390,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.restore();
         ctx.shadowBlur = 0;
     }
+
     function drawFlippers() {
         drawFlipper(leftFlipper);
         drawFlipper(rightFlipper);
@@ -438,7 +430,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Main Game Loop ---
     function gameLoop() {
         update();
         draw();
@@ -447,7 +438,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Start Game ---
     initializeGame();
     requestAnimationFrame(gameLoop);
 });
