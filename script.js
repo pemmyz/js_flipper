@@ -31,11 +31,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const CHUTE_WIDTH = 50;
     const PLAYFIELD_WIDTH = CANVAS_WIDTH - CHUTE_WIDTH;
 
+    // --- REFACTORED: FLIPPER & SLOPE TUNING CONSTANTS ---
     const FLIPPER_Y_OFFSET = 60;
     const FLIPPER_LENGTH = 85;
-    const FLIPPER_GAP = 100;
-    const FLIPPER_REST_ANGLE = Math.PI / 7;
-    const FLIPPER_SWING_ANGLE = Math.PI / 3;
+    const FLIPPER_REST_ANGLE = Math.PI / 8; // ~22.5 degrees - a shallower angle
+    const FLIPPER_SWING_ANGLE = Math.PI / 3;  // 60 degrees of motion
+    // The horizontal distance between the flipper *pivots*.
+    // This value is calculated to leave a ~35px gap between the flipper tips at rest.
+    const FLIPPER_GAP = (2 * FLIPPER_LENGTH * Math.cos(FLIPPER_REST_ANGLE)) + 35;
+
 
     // --- Sound Effects (Unchanged) ---
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -46,25 +50,10 @@ document.addEventListener('DOMContentLoaded', () => {
         oscillator.connect(gainNode);
         gainNode.connect(audioCtx.destination);
         gainNode.gain.setValueAtTime(volume, audioCtx.currentTime);
-        if (type === 'launch') {
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(100, audioCtx.currentTime);
-            oscillator.frequency.exponentialRampToValueAtTime(1000, audioCtx.currentTime + 0.1);
-            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
-        } else if (type === 'bounce') {
-            oscillator.type = 'triangle';
-            oscillator.frequency.setValueAtTime(400 + Math.random() * 200, audioCtx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
-        } else if (type === 'flipper') {
-             oscillator.type = 'square';
-             oscillator.frequency.setValueAtTime(150, audioCtx.currentTime);
-             gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
-        } else if (type === 'lose_ball') {
-            oscillator.type = 'sawtooth';
-            oscillator.frequency.setValueAtTime(200, audioCtx.currentTime);
-            oscillator.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.5);
-            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);
-        }
+        if (type === 'launch'){oscillator.type = 'sine';oscillator.frequency.setValueAtTime(100, audioCtx.currentTime);oscillator.frequency.exponentialRampToValueAtTime(1000, audioCtx.currentTime + 0.1);gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);}
+        else if (type === 'bounce'){oscillator.type = 'triangle';oscillator.frequency.setValueAtTime(400 + Math.random() * 200, audioCtx.currentTime);gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);}
+        else if (type === 'flipper'){oscillator.type = 'square';oscillator.frequency.setValueAtTime(150, audioCtx.currentTime);gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);}
+        else if (type === 'lose_ball'){oscillator.type = 'sawtooth';oscillator.frequency.setValueAtTime(200, audioCtx.currentTime);oscillator.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.5);gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);}
         oscillator.start(audioCtx.currentTime);
         oscillator.stop(audioCtx.currentTime + 0.8);
     }
@@ -116,9 +105,11 @@ document.addEventListener('DOMContentLoaded', () => {
         bumpers.push({ x: 400, y: 150, radius: BUMPER_RADIUS, points: 25 });
     }
 
+    // --- REFACTORED --- This function now correctly calculates the mirrored right flipper.
     function createFlippers() {
         const flipperBaseY = CANVAS_HEIGHT - FLIPPER_Y_OFFSET;
         const flipperSpeed = 0.4;
+        
         const leftPivotX = PLAYFIELD_WIDTH / 2 - FLIPPER_GAP / 2;
         const rightPivotX = PLAYFIELD_WIDTH / 2 + FLIPPER_GAP / 2;
 
@@ -130,19 +121,22 @@ document.addEventListener('DOMContentLoaded', () => {
             angle: FLIPPER_REST_ANGLE,
             speed: flipperSpeed, active: false, width: 15, isRight: false
         };
+        // The right flipper's angles are a mirror of the left's.
         rightFlipper = {
             x: rightPivotX, y: flipperBaseY,
             length: FLIPPER_LENGTH,
             baseAngle: Math.PI - FLIPPER_REST_ANGLE,
-            activeAngle: Math.PI - FLIPPER_REST_ANGLE + FLIPPER_SWING_ANGLE,
+            activeAngle: Math.PI - FLIPPER_REST_ANGLE + FLIPPER_SWING_ANGLE, // Swings outwards
             angle: Math.PI - FLIPPER_REST_ANGLE,
             speed: flipperSpeed, active: false, width: 15, isRight: true
         };
     }
     
+    // --- REFACTORED --- Slopes are now dynamic and perfectly aligned.
     function createSlopes() {
         slopes.length = 0;
-        const slopeStartY = CANVAS_HEIGHT * 0.6;
+        const slopeStartY = CANVAS_HEIGHT * 0.6; // Start slopes higher up.
+        
         slopes.push({ x1: 0, y1: slopeStartY, x2: leftFlipper.x, y2: leftFlipper.y });
         slopes.push({ x1: PLAYFIELD_WIDTH, y1: slopeStartY, x2: rightFlipper.x, y2: rightFlipper.y });
     }
@@ -208,33 +202,18 @@ document.addEventListener('DOMContentLoaded', () => {
             ball.x += ball.vx;
             ball.y += ball.vy;
 
-            if (ball.x + ball.radius > PLAYFIELD_WIDTH) {
-                ball.vx *= -BOUNCE_FACTOR;
-                ball.x = PLAYFIELD_WIDTH - ball.radius;
-            }
-            if (ball.x - ball.radius < 0) {
-                ball.vx *= -BOUNCE_FACTOR;
-                ball.x = ball.radius;
-            }
-            if (ball.y - ball.radius < 0) {
-                ball.vy *= -BOUNCE_FACTOR;
-                ball.y = ball.radius;
-            }
+            if (ball.x + ball.radius > PLAYFIELD_WIDTH) {ball.vx *= -BOUNCE_FACTOR; ball.x = PLAYFIELD_WIDTH - ball.radius;}
+            if (ball.x - ball.radius < 0) {ball.vx *= -BOUNCE_FACTOR; ball.x = ball.radius;}
+            if (ball.y - ball.radius < 0) {ball.vy *= -BOUNCE_FACTOR; ball.y = ball.radius;}
             
             bumpers.forEach(bumper => {
-                const dx = ball.x - bumper.x;
-                const dy = ball.y - bumper.y;
+                const dx = ball.x - bumper.x; const dy = ball.y - bumper.y;
                 const distance = Math.hypot(dx, dy);
                 if (distance < ball.radius + bumper.radius) {
-                    playSound('bounce', 0.5);
-                    score += bumper.points;
-                    updateUI();
-                    const angle = Math.atan2(dy, dx);
-                    const overlap = ball.radius + bumper.radius - distance;
-                    ball.x += Math.cos(angle) * overlap;
-                    ball.y += Math.sin(angle) * overlap;
-                    const normalX = dx / distance;
-                    const normalY = dy / distance;
+                    playSound('bounce', 0.5); score += bumper.points; updateUI();
+                    const angle = Math.atan2(dy, dx); const overlap = ball.radius + bumper.radius - distance;
+                    ball.x += Math.cos(angle) * overlap; ball.y += Math.sin(angle) * overlap;
+                    const normalX = dx / distance; const normalY = dy / distance;
                     const dotProduct = (ball.vx * normalX + ball.vy * normalY);
                     ball.vx = (ball.vx - 2 * dotProduct * normalX) * (BOUNCE_FACTOR + 0.3);
                     ball.vy = (ball.vy - 2 * dotProduct * normalY) * (BOUNCE_FACTOR + 0.3);
@@ -259,13 +238,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- MODIFIED --- This function now correctly calculates the line segment for both flippers.
+    // --- REFACTORED --- This logic is now simpler and more correct.
     function handleFlipperCollision(flipper) {
         const x1 = flipper.x;
         const y1 = flipper.y;
         
-        // Calculate the endpoint based on whether it's the left or right flipper
-        const length = flipper.isRight ? -flipper.length : flipper.length;
+        // The endpoint is always calculated based on the angle, which is already correct for each flipper.
         const x2 = x1 + Math.cos(flipper.angle) * flipper.length;
         const y2 = y1 + Math.sin(flipper.angle) * flipper.length;
         
@@ -297,24 +275,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleSlopeCollisions() {
         slopes.forEach(slope => {
-            const dx = slope.x2 - slope.x1;
-            const dy = slope.y2 - slope.y1;
+            const dx = slope.x2 - slope.x1; const dy = slope.y2 - slope.y1;
             const lineLengthSq = dx * dx + dy * dy;
             let t = ((ball.x - slope.x1) * dx + (ball.y - slope.y1) * dy) / lineLengthSq;
             t = Math.max(0, Math.min(1, t));
-            const closestX = slope.x1 + t * dx;
-            const closestY = slope.y1 + t * dy;
+            const closestX = slope.x1 + t * dx; const closestY = slope.y1 + t * dy;
             const dist = Math.hypot(ball.x - closestX, ball.y - closestY);
             if (dist < ball.radius) {
                 playSound('bounce', 0.4);
                 const overlap = ball.radius - dist;
-                const normalX = ball.x - closestX;
-                const normalY = ball.y - closestY;
+                const normalX = ball.x - closestX; const normalY = ball.y - closestY;
                 const magnitude = Math.hypot(normalX, normalY) || 1;
-                const nx = normalX / magnitude;
-                const ny = normalY / magnitude;
-                ball.x += nx * overlap;
-                ball.y += ny * overlap;
+                const nx = normalX / magnitude; const ny = normalY / magnitude;
+                ball.x += nx * overlap; ball.y += ny * overlap;
                 const dotProduct = ball.vx * nx + ball.vy * ny;
                 ball.vx = (ball.vx - 2 * dotProduct * nx) * BOUNCE_FACTOR;
                 ball.vy = (ball.vy - 2 * dotProduct * ny) * BOUNCE_FACTOR;
@@ -370,18 +343,16 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.shadowBlur = 0;
     }
 
-    // --- MODIFIED --- This function now correctly draws both flippers pivoting from their base.
+    // --- REFACTORED --- This drawing logic is now simpler and visually correct.
     function drawFlipper(flipper) {
         ctx.save();
         ctx.translate(flipper.x, flipper.y);
         ctx.rotate(flipper.angle);
-
-        // Draw the rectangle starting from the pivot point (0,0)
-        // For the right flipper, we draw with a negative x-coordinate to extend leftwards.
-        const x = flipper.isRight ? -flipper.length : 0;
         
+        // Both flippers are drawn identically in their own rotated coordinate system.
+        // The angle itself dictates the orientation on the canvas.
         ctx.beginPath();
-        ctx.rect(x, -flipper.width / 2, flipper.length, flipper.width);
+        ctx.rect(0, -flipper.width / 2, flipper.length, flipper.width);
         
         ctx.fillStyle = '#bbbbbb';
         ctx.shadowColor = '#fff';
@@ -390,7 +361,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.restore();
         ctx.shadowBlur = 0;
     }
-
+    
     function drawFlippers() {
         drawFlipper(leftFlipper);
         drawFlipper(rightFlipper);
