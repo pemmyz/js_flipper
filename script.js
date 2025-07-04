@@ -89,7 +89,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         ballsLeft--;
         updateUI();
-        const newBall = { x: PLAYFIELD_WIDTH + CHUTE_WIDTH / 2, y: launcher.y, radius: BALL_RADIUS, vx: 0, vy: 0, state: 'ready' };
+        const newBall = { 
+            x: PLAYFIELD_WIDTH + CHUTE_WIDTH / 2, 
+            y: launcher.y, 
+            radius: BALL_RADIUS, 
+            vx: 0, 
+            vy: 0, 
+            state: 'ready',
+            // NEW: Property to track recent bounces for anti-stuck logic
+            recentSlopeBounces: [] 
+        };
         balls.push(newBall);
         launcher.power = 0;
         gameState = 'launch';
@@ -161,10 +170,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function update() {
         if (showHelp || gameState === 'gameOver') return;
-
         updateFlipper(leftFlipper);
         updateFlipper(rightFlipper);
-
         for (let i = balls.length - 1; i >= 0; i--) {
             const ball = balls[i];
             switch (ball.state) {
@@ -183,11 +190,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         ball.vx = -4;
                         prepareNextBall();
                     }
-                    // Check if it fell back down (dud launch)
                     if (ball.y > CANVAS_HEIGHT) {
-                        // --- CHANGE: REFUND BALL ON FAILED LAUNCH ---
                         ballsLeft++;
-                        balls.splice(i, 1); // Remove lost ball
+                        balls.splice(i, 1);
                     }
                     break;
                 case 'playing':
@@ -221,7 +226,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
             }
         }
-        
         const isChuteReady = balls.some(b => b.state === 'ready');
         const hasBallInPlay = balls.some(b => b.state === 'playing');
         if (!isChuteReady && hasBallInPlay && ballsLeft > 0 && chuteBecameEmptyAt === null) {
@@ -233,9 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
             prepareNextBall();
             chuteBecameEmptyAt = null;
         }
-
         updateUI();
-
         if (balls.length === 0 && gameState !== 'gameOver') {
             playSound('lose_ball');
             endGame();
@@ -280,24 +282,52 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- REFACTORED: Now includes anti-stuck logic ---
     function handleSlopeCollisions(ball) {
+        // Constants for the anti-stuck feature
+        const ANTI_STUCK_BOOST = 6;
+        const ANTI_STUCK_COUNT = 5;
+        const ANTI_STUCK_TIME_WINDOW = 1000; // 1 second in milliseconds
+
         slopes.forEach(slope => {
-            const dx = slope.x2 - slope.x1, dy = slope.y2 - slope.y1;
+            const dx = slope.x2 - slope.x1; const dy = slope.y2 - slope.y1;
             const lineLengthSq = dx * dx + dy * dy;
             let t = ((ball.x - slope.x1) * dx + (ball.y - slope.y1) * dy) / lineLengthSq;
             t = Math.max(0, Math.min(1, t));
-            const closestX = slope.x1 + t * dx, closestY = slope.y1 + t * dy;
+            const closestX = slope.x1 + t * dx; const closestY = slope.y1 + t * dy;
             const dist = Math.hypot(ball.x - closestX, ball.y - closestY);
+
             if (dist < ball.radius) {
                 playSound('bounce', 0.4);
+                
+                // --- Standard collision physics ---
                 const overlap = ball.radius - dist;
-                const normalX = ball.x - closestX, normalY = ball.y - closestY;
+                const normalX = ball.x - closestX; const normalY = ball.y - closestY;
                 const magnitude = Math.hypot(normalX, normalY) || 1;
-                const nx = normalX / magnitude, ny = normalY / magnitude;
+                const nx = normalX / magnitude; const ny = normalY / magnitude;
                 ball.x += nx * overlap; ball.y += ny * overlap;
                 const dotProduct = ball.vx * nx + ball.vy * ny;
                 ball.vx = (ball.vx - 2 * dotProduct * nx) * BOUNCE_FACTOR;
                 ball.vy = (ball.vy - 2 * dotProduct * ny) * BOUNCE_FACTOR;
+                
+                // --- NEW: Anti-stuck logic ---
+                const now = performance.now();
+                ball.recentSlopeBounces.push(now);
+                
+                // Keep only the bounces from the last second
+                ball.recentSlopeBounces = ball.recentSlopeBounces.filter(
+                    timestamp => now - timestamp < ANTI_STUCK_TIME_WINDOW
+                );
+
+                // If the ball has bounced too many times recently, give it a boost
+                if (ball.recentSlopeBounces.length >= ANTI_STUCK_COUNT) {
+                    // Apply a strong push directly away from the slope's normal
+                    ball.vx += nx * ANTI_STUCK_BOOST;
+                    ball.vy += ny * ANTI_STUCK_BOOST;
+                    
+                    // Clear the bounce history to prevent this from firing again immediately
+                    ball.recentSlopeBounces = [];
+                }
             }
         });
     }
@@ -319,7 +349,6 @@ document.addEventListener('DOMContentLoaded', () => {
         drawBumpers();
         drawFlippers();
         drawLauncherAndChute();
-        
         balls.forEach(ball => {
             if (ball.state === 'playing') {
                 ctx.beginPath();
@@ -370,11 +399,9 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(PLAYFIELD_WIDTH, 0); ctx.lineTo(PLAYFIELD_WIDTH, CANVAS_HEIGHT); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(PLAYFIELD_WIDTH, CHUTE_EXIT_Y + 50); ctx.quadraticCurveTo(PLAYFIELD_WIDTH, CHUTE_EXIT_Y, PLAYFIELD_WIDTH - 30, CHUTE_EXIT_Y); ctx.stroke();
-        
         const plungerY = launcher.y - launcher.power;
         ctx.fillStyle = '#ccc';
         ctx.fillRect(launcher.x - launcher.width / 2, plungerY, launcher.width, launcher.height);
-
         balls.forEach(ball => {
             if (ball.state === 'ready' || ball.state === 'launching') {
                 ctx.beginPath();
@@ -385,7 +412,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.shadowBlur = 0;
             }
         });
-
         if (gameState === 'launch' && launcher.charging) {
             ctx.fillStyle = 'rgba(255, 255, 0, 0.7)';
             ctx.fillRect(launcher.x + launcher.width, launcher.y, 5, -launcher.power * (150 / launcher.maxPower));
