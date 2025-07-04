@@ -22,9 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let gameState = 'launch';
     let showHelp = false;
     
-    // NEW: Timer for auto-serving the next ball
     let chuteBecameEmptyAt = null;
-    const AUTO_SERVE_DELAY = 5000; // 5 seconds
+    const AUTO_SERVE_DELAY = 5000;
 
     const GRAVITY = 0.15;
     const FRICTION = 0.995;
@@ -72,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ballsLeft = 3;
         gameState = 'launch';
         showHelp = false;
-        chuteBecameEmptyAt = null; // NEW: Reset timer on new game
+        chuteBecameEmptyAt = null;
         helpLegend.classList.add('hidden');
         gameOverScreen.classList.add('hidden');
         balls = [];
@@ -96,7 +95,6 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState = 'launch';
     }
     
-    // (createBumpers, createFlippers, createSlopes, createLauncher, toggleHelp functions are unchanged)
     function createBumpers() {
         bumpers.length = 0;
         bumpers.push({ x: 300, y: 300, radius: BUMPER_RADIUS * 1.5, points: 50 });
@@ -134,7 +132,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showHelp = !showHelp;
         helpLegend.classList.toggle('hidden');
     }
-
 
     window.addEventListener('keydown', (e) => {
         if (e.code === 'KeyH') { toggleHelp(); return; }
@@ -177,7 +174,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     ball.y = launcher.y - launcher.power;
                     break;
-
                 case 'launching':
                     ball.vy += GRAVITY;
                     ball.y += ball.vy;
@@ -187,11 +183,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         ball.vx = -4;
                         prepareNextBall();
                     }
+                    // Check if it fell back down (dud launch)
                     if (ball.y > CANVAS_HEIGHT) {
-                        balls.splice(i, 1);
+                        // --- CHANGE: REFUND BALL ON FAILED LAUNCH ---
+                        ballsLeft++;
+                        balls.splice(i, 1); // Remove lost ball
                     }
                     break;
-
                 case 'playing':
                     ball.vy += GRAVITY;
                     ball.vx *= FRICTION;
@@ -224,24 +222,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // --- NEW: Auto-serve logic ---
         const isChuteReady = balls.some(b => b.state === 'ready');
         const hasBallInPlay = balls.some(b => b.state === 'playing');
-
         if (!isChuteReady && hasBallInPlay && ballsLeft > 0 && chuteBecameEmptyAt === null) {
-            // If the chute is empty, a ball is in play, more balls are available, and the timer isn't running, START the timer.
             chuteBecameEmptyAt = performance.now();
         } else if (isChuteReady) {
-            // If a ball is in the chute, make sure the timer is off.
             chuteBecameEmptyAt = null;
         }
-
-        // If the timer is running, check if 5 seconds have passed.
         if (chuteBecameEmptyAt !== null && performance.now() - chuteBecameEmptyAt > AUTO_SERVE_DELAY) {
             prepareNextBall();
-            chuteBecameEmptyAt = null; // Reset the timer after it fires
+            chuteBecameEmptyAt = null;
         }
-        // --- End of new logic ---
 
         updateUI();
 
@@ -259,7 +250,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // (handleFlipperCollision, handleSlopeCollisions, endGame, updateUI, and all draw functions are unchanged)
     function handleFlipperCollision(ball, flipper) {
         const targetAngle = flipper.active ? flipper.activeAngle : flipper.baseAngle;
         const x1 = flipper.x, y1 = flipper.y;
@@ -284,8 +274,8 @@ document.addEventListener('DOMContentLoaded', () => {
             ball.vx = (ball.vx - 2 * dotProduct * nx) * bounce;
             ball.vy = (ball.vy - 2 * dotProduct * ny) * bounce;
             if (flipper.active && Math.abs(flipper.angle - targetAngle) > 0.01) {
-                ball.vy -= 12;
-                ball.vx += (ball.x - flipper.x) * 0.15;
+                ball.vy -= 16;
+                ball.vx += (ball.x - flipper.x) * 0.18;
             }
         }
     }
@@ -401,7 +391,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.fillRect(launcher.x + launcher.width, launcher.y, 5, -launcher.power * (150 / launcher.maxPower));
         }
     }
-
 
     function gameLoop() {
         update();
