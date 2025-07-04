@@ -21,6 +21,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let ballsLeft = 3;
     let gameState = 'launch';
     let showHelp = false;
+    
+    // NEW: Timer for auto-serving the next ball
+    let chuteBecameEmptyAt = null;
+    const AUTO_SERVE_DELAY = 5000; // 5 seconds
 
     const GRAVITY = 0.15;
     const FRICTION = 0.995;
@@ -30,16 +34,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const CHUTE_WIDTH = 50;
     const PLAYFIELD_WIDTH = CANVAS_WIDTH - CHUTE_WIDTH;
-    const CHUTE_EXIT_Y = 100; // The Y-coordinate where the ball enters the playfield
+    const CHUTE_EXIT_Y = 100;
 
-    // --- REFACTORED: FLIPPER & SLOPE TUNING CONSTANTS ---
     const FLIPPER_Y_OFFSET = 60;
     const FLIPPER_LENGTH = 85;
     const FLIPPER_REST_ANGLE = Math.PI / 8;
     const FLIPPER_SWING_ANGLE = Math.PI / 3;
     const FLIPPER_GAP = (2 * FLIPPER_LENGTH * Math.cos(FLIPPER_REST_ANGLE)) + 35;
 
-    // --- Sound Effects (Unchanged) ---
+    // --- Sound Effects ---
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     function playSound(type, volume = 0.3) {
         if (!audioCtx) return;
@@ -69,6 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ballsLeft = 3;
         gameState = 'launch';
         showHelp = false;
+        chuteBecameEmptyAt = null; // NEW: Reset timer on new game
         helpLegend.classList.add('hidden');
         gameOverScreen.classList.add('hidden');
         balls = [];
@@ -79,29 +83,20 @@ document.addEventListener('DOMContentLoaded', () => {
         prepareNextBall();
     }
 
-    // NEW: Function to prepare a new ball in the launch chute
     function prepareNextBall() {
         if (ballsLeft <= 0) {
-            gameState = 'playing'; // No more balls to launch
+            gameState = 'playing';
             return;
         }
         ballsLeft--;
         updateUI();
-
-        const newBall = {
-            x: PLAYFIELD_WIDTH + CHUTE_WIDTH / 2,
-            y: launcher.y,
-            radius: BALL_RADIUS,
-            vx: 0,
-            vy: 0,
-            // NEW: State machine for ball lifecycle
-            state: 'ready' // 'ready', 'launching', 'playing'
-        };
+        const newBall = { x: PLAYFIELD_WIDTH + CHUTE_WIDTH / 2, y: launcher.y, radius: BALL_RADIUS, vx: 0, vy: 0, state: 'ready' };
         balls.push(newBall);
         launcher.power = 0;
         gameState = 'launch';
     }
-
+    
+    // (createBumpers, createFlippers, createSlopes, createLauncher, toggleHelp functions are unchanged)
     function createBumpers() {
         bumpers.length = 0;
         bumpers.push({ x: 300, y: 300, radius: BUMPER_RADIUS * 1.5, points: 50 });
@@ -140,6 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
         helpLegend.classList.toggle('hidden');
     }
 
+
     window.addEventListener('keydown', (e) => {
         if (e.code === 'KeyH') { toggleHelp(); return; }
         if (showHelp) return;
@@ -157,9 +153,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const ballToLaunch = balls.find(b => b.state === 'ready');
             if (ballToLaunch) {
                 ballToLaunch.vy = -launcher.power;
-                ballToLaunch.state = 'launching'; // NEW: Set to launching state
+                ballToLaunch.state = 'launching';
                 playSound('launch');
-                prepareNextBall();
             }
         }
     });
@@ -175,11 +170,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         for (let i = balls.length - 1; i >= 0; i--) {
             const ball = balls[i];
-
-            // --- NEW: State-based physics ---
             switch (ball.state) {
                 case 'ready':
-                    // Ball is sitting on the plunger, its Y is controlled by launch power
                     if (launcher.charging && launcher.power < launcher.maxPower) {
                         launcher.power += 1;
                     }
@@ -187,37 +179,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
 
                 case 'launching':
-                    // Ball is traveling up the chute. Only vertical physics apply.
                     ball.vy += GRAVITY;
                     ball.y += ball.vy;
-                    ball.x = launcher.x; // Keep it locked in the chute's X position
-
-                    // Check if it reached the top and is moving up
+                    ball.x = launcher.x;
                     if (ball.y < CHUTE_EXIT_Y && ball.vy < 0) {
-                        ball.state = 'playing'; // Transition to main playfield
-                        ball.vx = -4; // Nudge it left into play
+                        ball.state = 'playing';
+                        ball.vx = -4;
+                        prepareNextBall();
                     }
-                    
-                    // Check if it fell back down (dud launch)
                     if (ball.y > CANVAS_HEIGHT) {
-                        balls.splice(i, 1); // Remove lost ball
+                        balls.splice(i, 1);
                     }
                     break;
 
                 case 'playing':
-                    // Ball is in the main playfield, full physics apply.
                     ball.vy += GRAVITY;
                     ball.vx *= FRICTION;
                     ball.vy *= FRICTION;
                     ball.x += ball.vx;
                     ball.y += ball.vy;
-
-                    // Wall collisions
                     if (ball.x + ball.radius > PLAYFIELD_WIDTH) { ball.vx *= -BOUNCE_FACTOR; ball.x = PLAYFIELD_WIDTH - ball.radius; }
                     if (ball.x - ball.radius < 0) { ball.vx *= -BOUNCE_FACTOR; ball.x = ball.radius; }
                     if (ball.y - ball.radius < 0) { ball.vy *= -BOUNCE_FACTOR; ball.y = ball.radius; }
-
-                    // Bumper collisions
                     bumpers.forEach(bumper => {
                         const dx = ball.x - bumper.x; const dy = ball.y - bumper.y;
                         const distance = Math.hypot(dx, dy);
@@ -231,19 +214,34 @@ document.addEventListener('DOMContentLoaded', () => {
                             ball.vy = (ball.vy - 2 * dotProduct * normalY) * (BOUNCE_FACTOR + 0.3);
                         }
                     });
-
-                    // Flipper and slope collisions
                     handleFlipperCollision(ball, leftFlipper);
                     handleFlipperCollision(ball, rightFlipper);
                     handleSlopeCollisions(ball);
-
-                    // Check if ball has drained
                     if (ball.y > CANVAS_HEIGHT) {
-                        balls.splice(i, 1); // Remove drained ball
+                        balls.splice(i, 1);
                     }
                     break;
             }
         }
+        
+        // --- NEW: Auto-serve logic ---
+        const isChuteReady = balls.some(b => b.state === 'ready');
+        const hasBallInPlay = balls.some(b => b.state === 'playing');
+
+        if (!isChuteReady && hasBallInPlay && ballsLeft > 0 && chuteBecameEmptyAt === null) {
+            // If the chute is empty, a ball is in play, more balls are available, and the timer isn't running, START the timer.
+            chuteBecameEmptyAt = performance.now();
+        } else if (isChuteReady) {
+            // If a ball is in the chute, make sure the timer is off.
+            chuteBecameEmptyAt = null;
+        }
+
+        // If the timer is running, check if 5 seconds have passed.
+        if (chuteBecameEmptyAt !== null && performance.now() - chuteBecameEmptyAt > AUTO_SERVE_DELAY) {
+            prepareNextBall();
+            chuteBecameEmptyAt = null; // Reset the timer after it fires
+        }
+        // --- End of new logic ---
 
         updateUI();
 
@@ -260,7 +258,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (flipper.active && Math.abs(flipper.angle - targetAngle) < flipper.speed) playSound('flipper', 0.2);
         }
     }
-
+    
+    // (handleFlipperCollision, handleSlopeCollisions, endGame, updateUI, and all draw functions are unchanged)
     function handleFlipperCollision(ball, flipper) {
         const targetAngle = flipper.active ? flipper.activeAngle : flipper.baseAngle;
         const x1 = flipper.x, y1 = flipper.y;
@@ -329,9 +328,8 @@ document.addEventListener('DOMContentLoaded', () => {
         drawSlopes();
         drawBumpers();
         drawFlippers();
-        drawLauncherAndChute(); // Draws the chute and the ball inside it
+        drawLauncherAndChute();
         
-        // Draw all balls that are in the main playfield
         balls.forEach(ball => {
             if (ball.state === 'playing') {
                 ctx.beginPath();
@@ -387,7 +385,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.fillStyle = '#ccc';
         ctx.fillRect(launcher.x - launcher.width / 2, plungerY, launcher.width, launcher.height);
 
-        // Draw any ball that is 'ready' or 'launching'
         balls.forEach(ball => {
             if (ball.state === 'ready' || ball.state === 'launching') {
                 ctx.beginPath();
@@ -404,6 +401,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.fillRect(launcher.x + launcher.width, launcher.y, 5, -launcher.power * (150 / launcher.maxPower));
         }
     }
+
 
     function gameLoop() {
         update();
