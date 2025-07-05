@@ -39,7 +39,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const FLIPPER_LENGTH = 85;
     const FLIPPER_REST_ANGLE = Math.PI / 8;
     const FLIPPER_SWING_ANGLE = Math.PI / 3;
-    const FLIPPER_GAP = (2 * FLIPPER_LENGTH * Math.cos(FLIPPER_REST_ANGLE)) + 35;
+    // MODIFIED: Slopes moved further apart and paddle gap increased.
+    // The gap between flipper tips is increased by half the ball's radius,
+    // which also pushes the flipper pivots (and thus the slopes) further apart.
+    const FLIPPER_GAP_BETWEEN_TIPS = (BALL_RADIUS * 2 + 5) + (BALL_RADIUS / 2); // 25px + 5px = 30px gap
+    const FLIPPER_GAP = (2 * FLIPPER_LENGTH * Math.cos(FLIPPER_REST_ANGLE)) + FLIPPER_GAP_BETWEEN_TIPS;
 
     // --- Sound Effects ---
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -96,7 +100,6 @@ document.addEventListener('DOMContentLoaded', () => {
             vx: 0, 
             vy: 0, 
             state: 'ready',
-            // NEW: Property to track recent bounces for anti-stuck logic
             recentSlopeBounces: [] 
         };
         balls.push(newBall);
@@ -244,11 +247,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- MODIFIED: Flipper logic updated to prevent "twittering" ---
     function updateFlipper(flipper) {
         const targetAngle = flipper.active ? flipper.activeAngle : flipper.baseAngle;
-        if (Math.abs(flipper.angle - targetAngle) > 0.01) {
-            flipper.angle += (targetAngle > flipper.angle ? 1 : -1) * flipper.speed;
-            if (flipper.active && Math.abs(flipper.angle - targetAngle) < flipper.speed) playSound('flipper', 0.2);
+        const diff = targetAngle - flipper.angle;
+
+        // If we're already at the target, do nothing.
+        if (Math.abs(diff) < 0.001) {
+            flipper.angle = targetAngle; // Sanity check to lock it in
+            return;
+        }
+
+        // Check if the next step would overshoot the target.
+        if (Math.abs(diff) <= flipper.speed) {
+            // If it would, snap to the target angle.
+            flipper.angle = targetAngle;
+            // Play sound only when snapping to the active (up) position.
+            if (flipper.active) {
+                playSound('flipper', 0.2);
+            }
+        } else {
+            // Otherwise, move one step closer.
+            flipper.angle += Math.sign(diff) * flipper.speed;
         }
     }
     
@@ -282,12 +302,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- REFACTORED: Now includes anti-stuck logic ---
     function handleSlopeCollisions(ball) {
-        // Constants for the anti-stuck feature
         const ANTI_STUCK_BOOST = 6;
         const ANTI_STUCK_COUNT = 5;
-        const ANTI_STUCK_TIME_WINDOW = 1000; // 1 second in milliseconds
+        const ANTI_STUCK_TIME_WINDOW = 1000;
 
         slopes.forEach(slope => {
             const dx = slope.x2 - slope.x1; const dy = slope.y2 - slope.y1;
@@ -300,7 +318,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (dist < ball.radius) {
                 playSound('bounce', 0.4);
                 
-                // --- Standard collision physics ---
                 const overlap = ball.radius - dist;
                 const normalX = ball.x - closestX; const normalY = ball.y - closestY;
                 const magnitude = Math.hypot(normalX, normalY) || 1;
@@ -310,22 +327,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 ball.vx = (ball.vx - 2 * dotProduct * nx) * BOUNCE_FACTOR;
                 ball.vy = (ball.vy - 2 * dotProduct * ny) * BOUNCE_FACTOR;
                 
-                // --- NEW: Anti-stuck logic ---
                 const now = performance.now();
                 ball.recentSlopeBounces.push(now);
                 
-                // Keep only the bounces from the last second
                 ball.recentSlopeBounces = ball.recentSlopeBounces.filter(
                     timestamp => now - timestamp < ANTI_STUCK_TIME_WINDOW
                 );
 
-                // If the ball has bounced too many times recently, give it a boost
                 if (ball.recentSlopeBounces.length >= ANTI_STUCK_COUNT) {
-                    // Apply a strong push directly away from the slope's normal
                     ball.vx += nx * ANTI_STUCK_BOOST;
                     ball.vy += ny * ANTI_STUCK_BOOST;
-                    
-                    // Clear the bounce history to prevent this from firing again immediately
                     ball.recentSlopeBounces = [];
                 }
             }
