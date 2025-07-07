@@ -31,8 +31,9 @@ canvas {
 
 #ui-panel {
     display: flex;
-    justify-content: space-around;
-    padding: 10px;
+    justify-content: space-between; /* MODIFIED */
+    align-items: center; /* MODIFIED */
+    padding: 10px 20px; /* MODIFIED */
     background-color: #000;
     border-bottom: 3px solid #999999;
     box-shadow: 0 0 10px #999999;
@@ -40,6 +41,7 @@ canvas {
 
 .ui-box {
     text-align: center;
+    width: 150px; /* Give a fixed width for alignment */
 }
 
 .ui-box h2 {
@@ -53,6 +55,34 @@ canvas {
     color: #ffffff;
     font-weight: bold;
     text-shadow: 0 0 5px #ffffff;
+}
+
+/* NEW: Styles for the new control buttons */
+#game-controls {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+}
+
+.ui-control-button {
+    padding: 5px 10px;
+    font-size: 0.8em;
+    font-family: 'Courier New', Courier, monospace;
+    background-color: #555;
+    color: #ddd;
+    border: 1px solid #999;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    width: 120px;
+    text-align: center;
+}
+
+.ui-control-button:hover {
+    background-color: #777;
+    border-color: #fff;
+    color: #fff;
 }
 
 #game-over-screen {
@@ -102,7 +132,6 @@ canvas {
     display: none !important;
 }
 
-/* NEW: Styles for the help legend */
 #help-legend {
     position: absolute;
     top: 50%;

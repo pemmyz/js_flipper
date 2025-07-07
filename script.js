@@ -15,12 +15,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const restartButton = document.getElementById('restart-button');
     const helpLegend = document.getElementById('help-legend');
     const closeHelpButton = document.getElementById('close-help-button');
+    // NEW: UI Control Buttons
+    const muteButton = document.getElementById('mute-button');
+    const gapButton = document.getElementById('gap-button');
+    const helpToggleButton = document.getElementById('help-toggle-button');
 
     // --- Game State and Constants ---
     let score = 0;
     let ballsLeft = 3;
     let gameState = 'launch';
     let showHelp = false;
+    let isMuted = false; // NEW: Mute state
+    let flipperGapBetweenTips; // NEW: Variable flipper gap
     
     let chuteBecameEmptyAt = null;
     const AUTO_SERVE_DELAY = 5000;
@@ -39,18 +45,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const FLIPPER_LENGTH = 85;
     const FLIPPER_REST_ANGLE = Math.PI / 8;
     const FLIPPER_SWING_ANGLE = Math.PI / 3;
-    const FLIPPER_GAP_BETWEEN_TIPS = (BALL_RADIUS * 2 + 5) + (BALL_RADIUS / 2);
-    const FLIPPER_GAP = (2 * FLIPPER_LENGTH * Math.cos(FLIPPER_REST_ANGLE)) + FLIPPER_GAP_BETWEEN_TIPS;
 
-    // --- NEW: Anti-stuck constants for flippers ---
-    const FLIPPER_ANTI_STUCK_BOOST = 10; // How much vertical velocity to add
-    const FLIPPER_ANTI_STUCK_COUNT = 4;   // How many bounces trigger the boost
-    const FLIPPER_ANTI_STUCK_TIME_WINDOW = 1000; // Time window in milliseconds (1 second)
+    // --- Anti-stuck constants for flippers ---
+    const FLIPPER_ANTI_STUCK_BOOST = 10; 
+    const FLIPPER_ANTI_STUCK_COUNT = 4;   
+    const FLIPPER_ANTI_STUCK_TIME_WINDOW = 1000;
 
     // --- Sound Effects ---
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     function playSound(type, volume = 0.3) {
-        if (!audioCtx) return;
+        if (isMuted || !audioCtx) return; // MODIFIED: Check mute status
         const oscillator = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
         oscillator.connect(gainNode);
@@ -78,6 +82,10 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState = 'launch';
         showHelp = false;
         chuteBecameEmptyAt = null;
+        
+        // NEW: Reset flipper gap on new game
+        flipperGapBetweenTips = (BALL_RADIUS * 2 + 5) + (BALL_RADIUS / 2);
+        
         helpLegend.classList.add('hidden');
         gameOverScreen.classList.add('hidden');
         balls = [];
@@ -86,6 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
         createSlopes();
         createLauncher();
         prepareNextBall();
+        updateUI();
     }
 
     function prepareNextBall() {
@@ -103,7 +112,6 @@ document.addEventListener('DOMContentLoaded', () => {
             vy: 0, 
             state: 'ready',
             recentSlopeBounces: [],
-            // MODIFIED: Add a tracker for flipper bounces
             recentFlipperBounces: []
         };
         balls.push(newBall);
@@ -127,8 +135,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function createFlippers() {
         const flipperBaseY = CANVAS_HEIGHT - FLIPPER_Y_OFFSET;
         const flipperSpeed = 0.4;
-        const leftPivotX = PLAYFIELD_WIDTH / 2 - FLIPPER_GAP / 2;
-        const rightPivotX = PLAYFIELD_WIDTH / 2 + FLIPPER_GAP / 2;
+        
+        // MODIFIED: Use the variable flipperGapBetweenTips to calculate total gap
+        const flipperGapTotal = (2 * FLIPPER_LENGTH * Math.cos(FLIPPER_REST_ANGLE)) + flipperGapBetweenTips;
+        
+        const leftPivotX = PLAYFIELD_WIDTH / 2 - flipperGapTotal / 2;
+        const rightPivotX = PLAYFIELD_WIDTH / 2 + flipperGapTotal / 2;
+
         leftFlipper = { x: leftPivotX, y: flipperBaseY, length: FLIPPER_LENGTH, baseAngle: FLIPPER_REST_ANGLE, activeAngle: FLIPPER_REST_ANGLE - FLIPPER_SWING_ANGLE, angle: FLIPPER_REST_ANGLE, speed: flipperSpeed, active: false, width: 15, isRight: false };
         rightFlipper = { x: rightPivotX, y: flipperBaseY, length: FLIPPER_LENGTH, baseAngle: Math.PI - FLIPPER_REST_ANGLE, activeAngle: Math.PI - FLIPPER_REST_ANGLE + FLIPPER_SWING_ANGLE, angle: Math.PI - FLIPPER_REST_ANGLE, speed: flipperSpeed, active: false, width: 15, isRight: true };
     }
@@ -149,6 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
         helpLegend.classList.toggle('hidden');
     }
 
+    // --- Event Listeners ---
     window.addEventListener('keydown', (e) => {
         if (e.code === 'KeyH') { toggleHelp(); return; }
         if (showHelp) return;
@@ -175,7 +189,24 @@ document.addEventListener('DOMContentLoaded', () => {
     restartButton.addEventListener('click', initializeGame);
     closeHelpButton.addEventListener('click', toggleHelp);
 
+    // NEW: Listeners for new control buttons
+    muteButton.addEventListener('click', () => {
+        isMuted = !isMuted;
+        muteButton.textContent = isMuted ? 'Unmute' : 'Mute';
+    });
+    
+    helpToggleButton.addEventListener('click', toggleHelp);
+
+    gapButton.addEventListener('click', () => {
+        if (gameState === 'gameOver') return;
+        flipperGapBetweenTips += 5;
+        createFlippers(); // Recalculate flipper positions
+        createSlopes();   // Recalculate slope positions to match new flippers
+    });
+
+    // --- Main Game Loop Functions ---
     function update() {
+        // (The rest of the `update`, `handle...Collision`, and drawing functions remain the same)
         if (showHelp || gameState === 'gameOver') return;
         updateFlipper(leftFlipper);
         updateFlipper(rightFlipper);
@@ -270,7 +301,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // MODIFIED: Added anti-stuck logic
     function handleFlipperCollision(ball, flipper) {
         const targetAngle = flipper.active ? flipper.activeAngle : flipper.baseAngle;
         const x1 = flipper.x, y1 = flipper.y;
@@ -299,22 +329,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 ball.vx += (ball.x - flipper.x) * 0.18;
             }
 
-            // --- NEW: Anti-stuck logic ---
             const now = performance.now();
             ball.recentFlipperBounces.push(now);
-            // Remove old bounces that are outside the time window
             ball.recentFlipperBounces = ball.recentFlipperBounces.filter(
                 timestamp => now - timestamp < FLIPPER_ANTI_STUCK_TIME_WINDOW
             );
-            // If we have enough recent bounces, trigger the boost
             if (ball.recentFlipperBounces.length >= FLIPPER_ANTI_STUCK_COUNT) {
-                ball.vy -= FLIPPER_ANTI_STUCK_BOOST; // Give a strong upward kick
-                // Give a small kick away from the center drain
+                ball.vy -= FLIPPER_ANTI_STUCK_BOOST; 
                 ball.vx += flipper.isRight ? -2 : 2; 
-                // Reset the counter to prevent it from firing on every frame
                 ball.recentFlipperBounces = []; 
             }
-            // --- END of anti-stuck logic ---
         }
     }
 
