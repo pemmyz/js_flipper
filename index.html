@@ -8,12 +8,14 @@
 </head>
 <body>
     <div id="game-container">
+        <!-- NEW: Theme toggle button -->
+        <button id="theme-toggle-button">Light Mode</button>
+
         <div id="ui-panel">
             <div class="ui-box">
                 <h2>SCORE</h2>
                 <p id="score">0</p>
             </div>
-            <!-- NEW: Control buttons -->
             <div id="game-controls">
                 <button id="mute-button" class="ui-control-button">Mute</button>
                 <button id="gap-button" class="ui-control-button">Widen Gap</button>
@@ -32,7 +34,6 @@
             <p><span>Right Arrow:</span> Right Flipper</p>
             <p><span>Spacebar:</span> Hold to Charge, Release to Launch</p>
             <p><span>H / Help Button:</span> Toggle this Help Screen</p>
-            <!-- MODIFIED: Added M and G key info -->
             <p><span>M / Mute Button:</span> Toggle Sound</p>
             <p><span>G / Gap Button:</span> Widen Flipper Gap</p>
             <button id="close-help-button">Close</button>

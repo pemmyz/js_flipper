@@ -15,18 +15,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const restartButton = document.getElementById('restart-button');
     const helpLegend = document.getElementById('help-legend');
     const closeHelpButton = document.getElementById('close-help-button');
-    // NEW: UI Control Buttons
     const muteButton = document.getElementById('mute-button');
     const gapButton = document.getElementById('gap-button');
     const helpToggleButton = document.getElementById('help-toggle-button');
+    // NEW: Theme toggle button element
+    const themeToggleButton = document.getElementById('theme-toggle-button');
 
     // --- Game State and Constants ---
     let score = 0;
     let ballsLeft = 3;
     let gameState = 'launch';
     let showHelp = false;
-    let isMuted = false; // NEW: Mute state
-    let flipperGapBetweenTips; // NEW: Variable flipper gap
+    let isMuted = false;
+    let flipperGapBetweenTips;
     
     let chuteBecameEmptyAt = null;
     const AUTO_SERVE_DELAY = 5000;
@@ -54,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Sound Effects ---
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     function playSound(type, volume = 0.3) {
-        if (isMuted || !audioCtx) return; // MODIFIED: Check mute status
+        if (isMuted || !audioCtx) return;
         const oscillator = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
         oscillator.connect(gainNode);
@@ -82,8 +83,6 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState = 'launch';
         showHelp = false;
         chuteBecameEmptyAt = null;
-        
-        // NEW: Reset flipper gap on new game
         flipperGapBetweenTips = (BALL_RADIUS * 2 + 5) + (BALL_RADIUS / 2);
         
         helpLegend.classList.add('hidden');
@@ -135,12 +134,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function createFlippers() {
         const flipperBaseY = CANVAS_HEIGHT - FLIPPER_Y_OFFSET;
         const flipperSpeed = 0.4;
-        
         const flipperGapTotal = (2 * FLIPPER_LENGTH * Math.cos(FLIPPER_REST_ANGLE)) + flipperGapBetweenTips;
-        
         const leftPivotX = PLAYFIELD_WIDTH / 2 - flipperGapTotal / 2;
         const rightPivotX = PLAYFIELD_WIDTH / 2 + flipperGapTotal / 2;
-
         leftFlipper = { x: leftPivotX, y: flipperBaseY, length: FLIPPER_LENGTH, baseAngle: FLIPPER_REST_ANGLE, activeAngle: FLIPPER_REST_ANGLE - FLIPPER_SWING_ANGLE, angle: FLIPPER_REST_ANGLE, speed: flipperSpeed, active: false, width: 15, isRight: false };
         rightFlipper = { x: rightPivotX, y: flipperBaseY, length: FLIPPER_LENGTH, baseAngle: Math.PI - FLIPPER_REST_ANGLE, activeAngle: Math.PI - FLIPPER_REST_ANGLE + FLIPPER_SWING_ANGLE, angle: Math.PI - FLIPPER_REST_ANGLE, speed: flipperSpeed, active: false, width: 15, isRight: true };
     }
@@ -162,25 +158,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Event Listeners ---
-    // MODIFIED: Re-structured the keydown listener for clarity and new keys.
     window.addEventListener('keydown', (e) => {
-        // --- Keys that work regardless of game state (like help and mute) ---
         if (e.code === 'KeyH') {
             toggleHelp();
             return;
         }
         if (e.code === 'KeyM') {
-            // Programmatically click the mute button to avoid duplicating logic
             muteButton.click();
             return;
         }
-
-        // --- Stop processing if help is open or game is over ---
         if (showHelp || gameState === 'gameOver') return;
-
-        // --- Keys that only work during active gameplay ---
         if (e.code === 'KeyG') {
-            // Programmatically click the gap button
             gapButton.click();
             return;
         }
@@ -190,7 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     window.addEventListener('keyup', (e) => {
-        if (showHelp) return; // Ignore key releases if help is open
+        if (showHelp) return;
         if (e.code === 'ArrowLeft') leftFlipper.active = false;
         if (e.code === 'ArrowRight') rightFlipper.active = false;
         if (e.code === 'Space' && gameState === 'launch') {
@@ -207,7 +195,6 @@ document.addEventListener('DOMContentLoaded', () => {
     restartButton.addEventListener('click', initializeGame);
     closeHelpButton.addEventListener('click', toggleHelp);
 
-    // NEW: Listeners for new control buttons
     muteButton.addEventListener('click', () => {
         isMuted = !isMuted;
         muteButton.textContent = isMuted ? 'Unmute' : 'Mute';
@@ -218,9 +205,22 @@ document.addEventListener('DOMContentLoaded', () => {
     gapButton.addEventListener('click', () => {
         if (gameState === 'gameOver') return;
         flipperGapBetweenTips += 5;
-        createFlippers(); // Recalculate flipper positions
-        createSlopes();   // Recalculate slope positions to match new flippers
+        createFlippers();
+        createSlopes();
     });
+
+    // NEW: Event listener for the theme toggle button
+    themeToggleButton.addEventListener('click', () => {
+        document.body.classList.toggle('light-mode');
+
+        // Update button text for better user experience
+        if (document.body.classList.contains('light-mode')) {
+            themeToggleButton.textContent = 'Dark Mode';
+        } else {
+            themeToggleButton.textContent = 'Light Mode';
+        }
+    });
+
 
     // --- Main Game Loop Functions ---
     function update() {
@@ -302,17 +302,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateFlipper(flipper) {
         const targetAngle = flipper.active ? flipper.activeAngle : flipper.baseAngle;
         const diff = targetAngle - flipper.angle;
-
-        if (Math.abs(diff) < 0.001) {
-            flipper.angle = targetAngle;
-            return;
-        }
-
+        if (Math.abs(diff) < 0.001) { flipper.angle = targetAngle; return; }
         if (Math.abs(diff) <= flipper.speed) {
             flipper.angle = targetAngle;
-            if (flipper.active) {
-                playSound('flipper', 0.2);
-            }
+            if (flipper.active) { playSound('flipper', 0.2); }
         } else {
             flipper.angle += Math.sign(diff) * flipper.speed;
         }
@@ -345,12 +338,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 ball.vy -= 16;
                 ball.vx += (ball.x - flipper.x) * 0.18;
             }
-
             const now = performance.now();
             ball.recentFlipperBounces.push(now);
-            ball.recentFlipperBounces = ball.recentFlipperBounces.filter(
-                timestamp => now - timestamp < FLIPPER_ANTI_STUCK_TIME_WINDOW
-            );
+            ball.recentFlipperBounces = ball.recentFlipperBounces.filter(timestamp => now - timestamp < FLIPPER_ANTI_STUCK_TIME_WINDOW);
             if (ball.recentFlipperBounces.length >= FLIPPER_ANTI_STUCK_COUNT) {
                 ball.vy -= FLIPPER_ANTI_STUCK_BOOST; 
                 ball.vx += flipper.isRight ? -2 : 2; 
@@ -363,7 +353,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const ANTI_STUCK_BOOST = 6;
         const ANTI_STUCK_COUNT = 5;
         const ANTI_STUCK_TIME_WINDOW = 1000;
-
         slopes.forEach(slope => {
             const dx = slope.x2 - slope.x1; const dy = slope.y2 - slope.y1;
             const lineLengthSq = dx * dx + dy * dy;
@@ -371,10 +360,8 @@ document.addEventListener('DOMContentLoaded', () => {
             t = Math.max(0, Math.min(1, t));
             const closestX = slope.x1 + t * dx; const closestY = slope.y1 + t * dy;
             const dist = Math.hypot(ball.x - closestX, ball.y - closestY);
-
             if (dist < ball.radius) {
                 playSound('bounce', 0.4);
-                
                 const overlap = ball.radius - dist;
                 const normalX = ball.x - closestX; const normalY = ball.y - closestY;
                 const magnitude = Math.hypot(normalX, normalY) || 1;
@@ -383,14 +370,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const dotProduct = ball.vx * nx + ball.vy * ny;
                 ball.vx = (ball.vx - 2 * dotProduct * nx) * BOUNCE_FACTOR;
                 ball.vy = (ball.vy - 2 * dotProduct * ny) * BOUNCE_FACTOR;
-                
                 const now = performance.now();
                 ball.recentSlopeBounces.push(now);
-                
-                ball.recentSlopeBounces = ball.recentSlopeBounces.filter(
-                    timestamp => now - timestamp < ANTI_STUCK_TIME_WINDOW
-                );
-
+                ball.recentSlopeBounces = ball.recentSlopeBounces.filter(timestamp => now - timestamp < ANTI_STUCK_TIME_WINDOW);
                 if (ball.recentSlopeBounces.length >= ANTI_STUCK_COUNT) {
                     ball.vx += nx * ANTI_STUCK_BOOST;
                     ball.vy += ny * ANTI_STUCK_BOOST;
@@ -412,76 +394,63 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function draw() {
-        ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        drawSlopes();
-        drawBumpers();
-        drawFlippers();
-        drawLauncherAndChute();
-        balls.forEach(ball => {
-            if (ball.state === 'playing') {
-                ctx.beginPath();
-                ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-                ctx.fillStyle = '#c0c0c0'; ctx.strokeStyle = '#f0f0f0'; ctx.lineWidth = 2;
-                ctx.shadowColor = '#fff'; ctx.shadowBlur = 10;
-                ctx.fill(); ctx.stroke();
-                ctx.shadowBlur = 0;
-            }
-        });
-    }
+        const isLightMode = document.body.classList.contains('light-mode');
+        const mainColor = isLightMode ? '#333' : '#999';
+        const flipperColor = isLightMode ? '#888' : '#bbbbbb';
+        const flipperShadow = isLightMode ? '#555' : '#fff';
+        const ballColor = isLightMode ? '#444' : '#c0c0c0';
+        const ballStroke = isLightMode ? '#222' : '#f0f0f0';
+        const ballShadow = isLightMode ? '#777' : '#fff';
 
-    function drawBumpers() {
+        ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        
+        // Draw Slopes
+        ctx.strokeStyle = mainColor; ctx.lineWidth = 4; ctx.shadowColor = mainColor; ctx.shadowBlur = 5;
+        slopes.forEach(slope => { ctx.beginPath(); ctx.moveTo(slope.x1, slope.y1); ctx.lineTo(slope.x2, slope.y2); ctx.stroke(); });
+        ctx.shadowBlur = 0;
+
+        // Draw Bumpers
         bumpers.forEach(bumper => {
             ctx.beginPath(); ctx.arc(bumper.x, bumper.y, bumper.radius, 0, Math.PI * 2);
-            ctx.fillStyle = '#999999'; ctx.shadowColor = '#999999'; ctx.shadowBlur = 10;
+            ctx.fillStyle = mainColor; ctx.shadowColor = mainColor; ctx.shadowBlur = 10;
             ctx.fill();
         });
         ctx.shadowBlur = 0;
-    }
 
-    function drawFlipper(flipper) {
-        ctx.save();
-        ctx.translate(flipper.x, flipper.y); ctx.rotate(flipper.angle);
-        ctx.beginPath(); ctx.rect(0, -flipper.width / 2, flipper.length, flipper.width);
-        ctx.fillStyle = '#bbbbbb'; ctx.shadowColor = '#fff'; ctx.shadowBlur = 10;
-        ctx.fill();
-        ctx.restore(); ctx.shadowBlur = 0;
-    }
-
-    function drawFlippers() {
+        // Draw Flippers
+        function drawFlipper(flipper) {
+            ctx.save();
+            ctx.translate(flipper.x, flipper.y); ctx.rotate(flipper.angle);
+            ctx.beginPath(); ctx.rect(0, -flipper.width / 2, flipper.length, flipper.width);
+            ctx.fillStyle = flipperColor; ctx.shadowColor = flipperShadow; ctx.shadowBlur = 10;
+            ctx.fill();
+            ctx.restore(); ctx.shadowBlur = 0;
+        }
         drawFlipper(leftFlipper);
         drawFlipper(rightFlipper);
-    }
-
-    function drawSlopes() {
-        ctx.strokeStyle = '#999'; ctx.lineWidth = 4; ctx.shadowColor = '#999'; ctx.shadowBlur = 5;
-        slopes.forEach(slope => {
-            ctx.beginPath(); ctx.moveTo(slope.x1, slope.y1); ctx.lineTo(slope.x2, slope.y2);
-            ctx.stroke();
-        });
-        ctx.shadowBlur = 0;
-    }
-
-    function drawLauncherAndChute() {
-        ctx.fillStyle = '#222';
+        
+        // Draw Launcher and Chute
+        ctx.fillStyle = isLightMode ? '#ddd' : '#222';
         ctx.fillRect(PLAYFIELD_WIDTH, 0, CHUTE_WIDTH, CANVAS_HEIGHT);
-        ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+        ctx.strokeStyle = mainColor; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(PLAYFIELD_WIDTH, 0); ctx.lineTo(PLAYFIELD_WIDTH, CANVAS_HEIGHT); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(PLAYFIELD_WIDTH, CHUTE_EXIT_Y + 50); ctx.quadraticCurveTo(PLAYFIELD_WIDTH, CHUTE_EXIT_Y, PLAYFIELD_WIDTH - 30, CHUTE_EXIT_Y); ctx.stroke();
         const plungerY = launcher.y - launcher.power;
-        ctx.fillStyle = '#ccc';
+        ctx.fillStyle = isLightMode ? '#aaa' : '#ccc';
         ctx.fillRect(launcher.x - launcher.width / 2, plungerY, launcher.width, launcher.height);
+        
+        // Draw Balls
         balls.forEach(ball => {
-            if (ball.state === 'ready' || ball.state === 'launching') {
-                ctx.beginPath();
-                ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-                ctx.fillStyle = '#c0c0c0'; ctx.strokeStyle = '#f0f0f0'; ctx.lineWidth = 2;
-                ctx.shadowColor = '#fff'; ctx.shadowBlur = 10;
-                ctx.fill(); ctx.stroke();
-                ctx.shadowBlur = 0;
-            }
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fillStyle = ballColor; ctx.strokeStyle = ballStroke; ctx.lineWidth = 2;
+            ctx.shadowColor = ballShadow; ctx.shadowBlur = 10;
+            ctx.fill(); ctx.stroke();
+            ctx.shadowBlur = 0;
         });
+
         if (gameState === 'launch' && launcher.charging) {
-            ctx.fillStyle = 'rgba(255, 255, 0, 0.7)';
+            ctx.fillStyle = isLightMode ? 'rgba(255, 100, 0, 0.7)' : 'rgba(255, 255, 0, 0.7)';
             ctx.fillRect(launcher.x + launcher.width, launcher.y, 5, -launcher.power * (150 / launcher.maxPower));
         }
     }
@@ -495,6 +464,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     initializeGame();
-    toggleHelp(); // Show help menu on initial page load.
+    toggleHelp();
     requestAnimationFrame(gameLoop);
 });
