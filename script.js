@@ -478,5 +478,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     initializeGame();
+    toggleHelp(); // <<< MODIFICATION: Show help menu on initial page load.
     requestAnimationFrame(gameLoop);
 });
