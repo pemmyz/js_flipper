@@ -90,14 +90,14 @@ canvas {
     color: #fff;
 }
 
-/* NEW: Style for the theme toggle button */
+/* MODIFIED: Style for the theme toggle button outside the game area */
 #theme-toggle-button {
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    z-index: 50; /* Make sure it's on top */
-    padding: 5px 10px;
-    font-size: 0.8em;
+    position: fixed; /* Position relative to the viewport */
+    top: 15px;
+    right: 15px;
+    z-index: 50; /* Make sure it's on top of everything */
+    padding: 8px 15px; /* Slightly larger padding */
+    font-size: 0.9em;
     font-family: 'Courier New', Courier, monospace;
     background-color: #555;
     color: #ddd;

@@ -18,7 +18,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const muteButton = document.getElementById('mute-button');
     const gapButton = document.getElementById('gap-button');
     const helpToggleButton = document.getElementById('help-toggle-button');
-    // NEW: Theme toggle button element
     const themeToggleButton = document.getElementById('theme-toggle-button');
 
     // --- Game State and Constants ---
@@ -209,11 +208,8 @@ document.addEventListener('DOMContentLoaded', () => {
         createSlopes();
     });
 
-    // NEW: Event listener for the theme toggle button
     themeToggleButton.addEventListener('click', () => {
         document.body.classList.toggle('light-mode');
-
-        // Update button text for better user experience
         if (document.body.classList.contains('light-mode')) {
             themeToggleButton.textContent = 'Dark Mode';
         } else {
@@ -441,12 +437,15 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Draw Balls
         balls.forEach(ball => {
-            ctx.beginPath();
-            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-            ctx.fillStyle = ballColor; ctx.strokeStyle = ballStroke; ctx.lineWidth = 2;
-            ctx.shadowColor = ballShadow; ctx.shadowBlur = 10;
-            ctx.fill(); ctx.stroke();
-            ctx.shadowBlur = 0;
+            // Only draw balls that are in the launcher or on the playfield
+            if (ball.state === 'ready' || ball.state === 'launching' || ball.state === 'playing') {
+                ctx.beginPath();
+                ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+                ctx.fillStyle = ballColor; ctx.strokeStyle = ballStroke; ctx.lineWidth = 2;
+                ctx.shadowColor = ballShadow; ctx.shadowBlur = 10;
+                ctx.fill(); ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
         });
 
         if (gameState === 'launch' && launcher.charging) {
