@@ -136,7 +136,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const flipperBaseY = CANVAS_HEIGHT - FLIPPER_Y_OFFSET;
         const flipperSpeed = 0.4;
         
-        // MODIFIED: Use the variable flipperGapBetweenTips to calculate total gap
         const flipperGapTotal = (2 * FLIPPER_LENGTH * Math.cos(FLIPPER_REST_ANGLE)) + flipperGapBetweenTips;
         
         const leftPivotX = PLAYFIELD_WIDTH / 2 - flipperGapTotal / 2;
@@ -163,16 +162,35 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Event Listeners ---
+    // MODIFIED: Re-structured the keydown listener for clarity and new keys.
     window.addEventListener('keydown', (e) => {
-        if (e.code === 'KeyH') { toggleHelp(); return; }
-        if (showHelp) return;
+        // --- Keys that work regardless of game state (like help and mute) ---
+        if (e.code === 'KeyH') {
+            toggleHelp();
+            return;
+        }
+        if (e.code === 'KeyM') {
+            // Programmatically click the mute button to avoid duplicating logic
+            muteButton.click();
+            return;
+        }
+
+        // --- Stop processing if help is open or game is over ---
+        if (showHelp || gameState === 'gameOver') return;
+
+        // --- Keys that only work during active gameplay ---
+        if (e.code === 'KeyG') {
+            // Programmatically click the gap button
+            gapButton.click();
+            return;
+        }
         if (e.code === 'ArrowLeft') leftFlipper.active = true;
         if (e.code === 'ArrowRight') rightFlipper.active = true;
         if (e.code === 'Space' && gameState === 'launch') launcher.charging = true;
     });
 
     window.addEventListener('keyup', (e) => {
-        if (showHelp) return;
+        if (showHelp) return; // Ignore key releases if help is open
         if (e.code === 'ArrowLeft') leftFlipper.active = false;
         if (e.code === 'ArrowRight') rightFlipper.active = false;
         if (e.code === 'Space' && gameState === 'launch') {
@@ -206,7 +224,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Main Game Loop Functions ---
     function update() {
-        // (The rest of the `update`, `handle...Collision`, and drawing functions remain the same)
         if (showHelp || gameState === 'gameOver') return;
         updateFlipper(leftFlipper);
         updateFlipper(rightFlipper);
@@ -478,6 +495,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     initializeGame();
-    toggleHelp(); // <<< MODIFICATION: Show help menu on initial page load.
+    toggleHelp(); // Show help menu on initial page load.
     requestAnimationFrame(gameLoop);
 });
