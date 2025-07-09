@@ -217,6 +217,67 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // --- ADDED: Touch and Mouse Controls ---
+    const touchLeft = document.getElementById('touch-left');
+    const touchRight = document.getElementById('touch-right');
+    const touchLaunch = document.getElementById('touch-launch');
+
+    const handleControlStart = (type) => {
+        if (showHelp || gameState === 'gameOver') return;
+        switch(type) {
+            case 'left':
+                leftFlipper.active = true;
+                break;
+            case 'right':
+                rightFlipper.active = true;
+                break;
+            case 'launch':
+                if (gameState === 'launch') launcher.charging = true;
+                break;
+        }
+    };
+
+    const handleControlEnd = (type) => {
+        switch(type) {
+            case 'left':
+                leftFlipper.active = false;
+                break;
+            case 'right':
+                rightFlipper.active = false;
+                break;
+            case 'launch':
+                if (gameState === 'launch' && launcher.charging) {
+                    launcher.charging = false;
+                    const ballToLaunch = balls.find(b => b.state === 'ready');
+                    if (ballToLaunch) {
+                        ballToLaunch.vy = -launcher.power;
+                        ballToLaunch.state = 'launching';
+                        playSound('launch');
+                    }
+                }
+                break;
+        }
+    };
+
+    function setupControlEvents(element, type) {
+        ['touchstart', 'mousedown'].forEach(evt => {
+            element.addEventListener(evt, e => {
+                e.preventDefault();
+                handleControlStart(type);
+            });
+        });
+        ['touchend', 'touchcancel', 'mouseup', 'mouseleave'].forEach(evt => {
+            element.addEventListener(evt, e => {
+                e.preventDefault();
+                handleControlEnd(type);
+            });
+        });
+    }
+
+    setupControlEvents(touchLeft, 'left');
+    setupControlEvents(touchRight, 'right');
+    setupControlEvents(touchLaunch, 'launch');
+
 
     // --- Main Game Loop Functions ---
     function update() {

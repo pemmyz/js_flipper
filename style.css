@@ -24,6 +24,8 @@ body {
     display: flex;
     flex-direction: column;
     transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    /* ADDED: Allow absolutely positioned children to appear outside */
+    overflow: visible; 
 }
 
 canvas {
@@ -203,6 +205,45 @@ canvas {
     margin: 20px auto 0;
 }
 
+/* NEW: Touchscreen Control Buttons */
+.touch-button {
+    position: absolute;
+    width: 80px;
+    height: 80px;
+    background-color: rgba(100, 100, 100, 0.5);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    border-radius: 50%;
+    z-index: 100;
+    cursor: pointer;
+    user-select: none; /* Prevents text selection */
+    -webkit-tap-highlight-color: transparent; /* Removes tap highlight on mobile */
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 2.5em;
+    font-weight: bold;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: 'Courier New', Courier, monospace;
+    transition: background-color 0.1s ease;
+}
+.touch-button:active {
+    background-color: rgba(150, 150, 150, 0.7);
+}
+
+#touch-left {
+    left: -90px; /* 80px width + 10px gap */
+    bottom: -3px; /* Align with bottom of game-container border */
+}
+
+#touch-right {
+    right: -90px;
+    bottom: -3px;
+}
+
+#touch-launch {
+    right: -90px;
+    bottom: 90px; /* 80px height + 10px gap */
+}
 
 /* NEW: Styles for Light Mode */
 body.light-mode {
@@ -285,4 +326,14 @@ body.light-mode #help-legend h2 {
 
 body.light-mode #help-legend span {
     color: #333;
+}
+
+/* ADDED: Light mode for touch buttons */
+body.light-mode .touch-button {
+    background-color: rgba(200, 200, 200, 0.6);
+    border-color: rgba(0, 0, 0, 0.5);
+    color: rgba(0, 0, 0, 0.7);
+}
+body.light-mode .touch-button:active {
+    background-color: rgba(170, 170, 170, 0.8);
 }
