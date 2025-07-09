@@ -1,6 +1,6 @@
 # js_flipper
 
-# 🎮 HTML5 Flipper
+# 🎮 Simple Flipper
 
 A retro-inspired pinball game made with HTML5 Canvas and JavaScript. Use your keyboard to control the flippers and launch balls, rack up points by hitting bumpers, and avoid losing your ball through the center!
 
