@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let botModeActive = false;
     let botActivationTimer = null;
     let botCountdownInterval = null;
-    let botLaunchTimerId = null; // ADDED: Timer for subsequent bot launches
+    let botLaunchTimerId = null;
 
     let chuteBecameEmptyAt = null;
     const AUTO_SERVE_DELAY = 5000;
@@ -60,8 +60,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Sound Effects ---
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    // ADDED: Function to unlock audio on user interaction
+    function unlockAudio() {
+        if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+    }
+
     function playSound(type, volume = 0.3) {
         if (isMuted || !audioCtx) return;
+        // The unlockAudio() function called on user gestures handles resuming the context.
+        // This function can now proceed as normal.
         const oscillator = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
         oscillator.connect(gainNode);
@@ -91,11 +101,10 @@ document.addEventListener('DOMContentLoaded', () => {
         chuteBecameEmptyAt = null;
         flipperGapBetweenTips = (BALL_RADIUS * 2 + 5) + (BALL_RADIUS / 2);
         
-        // --- BOT MODE INITIALIZATION ---
         botModeActive = false;
         clearTimeout(botActivationTimer);
         clearInterval(botCountdownInterval);
-        clearTimeout(botLaunchTimerId); // ADDED: Clear any pending bot launch
+        clearTimeout(botLaunchTimerId); 
         botLaunchTimerId = null;
         startBotCountdown();
 
@@ -131,7 +140,6 @@ document.addEventListener('DOMContentLoaded', () => {
         launcher.power = 0;
         gameState = 'launch';
 
-        // MODIFIED: If bot mode is active, schedule the next launch
         if (botModeActive) {
             botLaunchTimerId = setTimeout(botLaunchBall, 3000);
         }
@@ -193,25 +201,26 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }, 1000);
         
-        // MODIFIED: When timer finishes, activate bot and launch first ball.
         botActivationTimer = setTimeout(() => {
             if (gameState !== 'gameOver') { 
+                if (showHelp) {
+                    toggleHelp();
+                }
                 botModeActive = true;
                 updateBotStatusText();
-                botLaunchBall(); // Launch the first ball immediately
+                botLaunchBall(); 
             }
             botActivationTimer = null;
         }, 5000);
     }
 
     function toggleBotMode() {
+        unlockAudio(); // Also unlock if user manually toggles bot mode
         botModeActive = !botModeActive;
-        // Stop the auto-activation process if the user toggles manually
         if (botActivationTimer) clearTimeout(botActivationTimer);
         if (botCountdownInterval) clearInterval(botCountdownInterval);
         botActivationTimer = null;
         botCountdownInterval = null;
-        // If turning bot mode off, cancel any pending auto-launch
         if (!botModeActive) {
             clearTimeout(botLaunchTimerId);
             botLaunchTimerId = null;
@@ -219,20 +228,18 @@ document.addEventListener('DOMContentLoaded', () => {
         updateBotStatusText();
     }
 
-    // ADDED: Function to cancel bot mode on player input
     function cancelBotMode() {
-        if (!botModeActive) return; // Do nothing if it's already off
+        if (!botModeActive) return;
         botModeActive = false;
-        clearTimeout(botLaunchTimerId); // Stop any scheduled launch
+        clearTimeout(botLaunchTimerId);
         botLaunchTimerId = null;
         updateBotStatusText();
     }
 
-    // ADDED: Bot auto-launch function
     function botLaunchBall() {
         const ballToLaunch = balls.find(b => b.state === 'ready');
         if (ballToLaunch) {
-            launcher.power = launcher.maxPower; // Full power
+            launcher.power = launcher.maxPower;
             ballToLaunch.vy = -launcher.power;
             ballToLaunch.state = 'launching';
             playSound('launch');
@@ -246,7 +253,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Event Listeners ---
     window.addEventListener('keydown', (e) => {
-        // MODIFIED: Player flipper input cancels bot mode
+        // Any keydown is a user gesture, good place to unlock audio
+        unlockAudio(); 
+
         if (botModeActive && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
             cancelBotMode();
         }
@@ -288,15 +297,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    restartButton.addEventListener('click', initializeGame);
-    closeHelpButton.addEventListener('click', toggleHelp);
+    // MODIFIED: Added unlockAudio() to user-initiated events
+    restartButton.addEventListener('click', () => {
+        unlockAudio();
+        initializeGame();
+    });
+    closeHelpButton.addEventListener('click', () => {
+        unlockAudio();
+        toggleHelp();
+    });
 
     muteButton.addEventListener('click', () => {
+        unlockAudio();
         isMuted = !isMuted;
         muteButton.textContent = isMuted ? 'Unmute' : 'Mute';
     });
     
-    helpToggleButton.addEventListener('click', toggleHelp);
+    helpToggleButton.addEventListener('click', () => {
+        unlockAudio();
+        toggleHelp();
+    });
 
     gapButton.addEventListener('click', () => {
         if (gameState === 'gameOver') return;
@@ -320,7 +340,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const touchLaunch = document.getElementById('touch-launch');
 
     const handleControlStart = (type) => {
-        // MODIFIED: Player flipper input cancels bot mode
+        unlockAudio(); // Unlock audio on any touch/mouse interaction
+
         if (botModeActive && (type === 'left' || type === 'right')) {
             cancelBotMode();
         }
@@ -385,7 +406,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function update() {
         if (showHelp || gameState === 'gameOver') return;
 
-        // MODIFIED: Bot Mode Logic
         if (botModeActive) {
             let activateLeft = false;
             let activateRight = false;
@@ -566,7 +586,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function endGame() {
-        // MODIFIED: Stop all bot timers on game over
         clearTimeout(botActivationTimer);
         clearInterval(botCountdownInterval);
         clearTimeout(botLaunchTimerId);
@@ -642,7 +661,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.fillRect(launcher.x + launcher.width, launcher.y, 5, -launcher.power * (150 / launcher.maxPower));
         }
 
-        // ADDED: Draw "BOT MODE ACTIVE" text on the canvas
         if (botModeActive) {
             ctx.save();
             ctx.font = 'bold 50px "Courier New", Courier, monospace';
