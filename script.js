@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const gapButton = document.getElementById('gap-button');
     const helpToggleButton = document.getElementById('help-toggle-button');
     const themeToggleButton = document.getElementById('theme-toggle-button');
-    const botStatusText = document.getElementById('bot-status-text'); // ADDED: Bot status element
+    const botStatusText = document.getElementById('bot-status-text');
 
     // --- Game State and Constants ---
     let score = 0;
@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let botModeActive = false;
     let botActivationTimer = null;
     let botCountdownInterval = null;
+    let botLaunchTimerId = null; // ADDED: Timer for subsequent bot launches
 
     let chuteBecameEmptyAt = null;
     const AUTO_SERVE_DELAY = 5000;
@@ -94,7 +95,9 @@ document.addEventListener('DOMContentLoaded', () => {
         botModeActive = false;
         clearTimeout(botActivationTimer);
         clearInterval(botCountdownInterval);
-        startBotCountdown(); // Start the 5-second activation process
+        clearTimeout(botLaunchTimerId); // ADDED: Clear any pending bot launch
+        botLaunchTimerId = null;
+        startBotCountdown();
 
         helpLegend.classList.add('hidden');
         gameOverScreen.classList.add('hidden');
@@ -127,6 +130,11 @@ document.addEventListener('DOMContentLoaded', () => {
         balls.push(newBall);
         launcher.power = 0;
         gameState = 'launch';
+
+        // MODIFIED: If bot mode is active, schedule the next launch
+        if (botModeActive) {
+            botLaunchTimerId = setTimeout(botLaunchBall, 3000);
+        }
     }
     
     function createBumpers() {
@@ -185,10 +193,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }, 1000);
         
+        // MODIFIED: When timer finishes, activate bot and launch first ball.
         botActivationTimer = setTimeout(() => {
             if (gameState !== 'gameOver') { 
                 botModeActive = true;
                 updateBotStatusText();
+                botLaunchBall(); // Launch the first ball immediately
             }
             botActivationTimer = null;
         }, 5000);
@@ -201,7 +211,32 @@ document.addEventListener('DOMContentLoaded', () => {
         if (botCountdownInterval) clearInterval(botCountdownInterval);
         botActivationTimer = null;
         botCountdownInterval = null;
+        // If turning bot mode off, cancel any pending auto-launch
+        if (!botModeActive) {
+            clearTimeout(botLaunchTimerId);
+            botLaunchTimerId = null;
+        }
         updateBotStatusText();
+    }
+
+    // ADDED: Function to cancel bot mode on player input
+    function cancelBotMode() {
+        if (!botModeActive) return; // Do nothing if it's already off
+        botModeActive = false;
+        clearTimeout(botLaunchTimerId); // Stop any scheduled launch
+        botLaunchTimerId = null;
+        updateBotStatusText();
+    }
+
+    // ADDED: Bot auto-launch function
+    function botLaunchBall() {
+        const ballToLaunch = balls.find(b => b.state === 'ready');
+        if (ballToLaunch) {
+            launcher.power = launcher.maxPower; // Full power
+            ballToLaunch.vy = -launcher.power;
+            ballToLaunch.state = 'launching';
+            playSound('launch');
+        }
     }
 
     function updateBotStatusText() {
@@ -211,6 +246,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Event Listeners ---
     window.addEventListener('keydown', (e) => {
+        // MODIFIED: Player flipper input cancels bot mode
+        if (botModeActive && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
+            cancelBotMode();
+        }
+
         if (e.code === 'KeyH') {
             toggleHelp();
             return;
@@ -219,7 +259,7 @@ document.addEventListener('DOMContentLoaded', () => {
             muteButton.click();
             return;
         }
-        if (e.code === 'KeyB') { // ADDED: Bot toggle key
+        if (e.code === 'KeyB') {
             toggleBotMode();
             return;
         }
@@ -274,12 +314,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- ADDED: Touch and Mouse Controls ---
+    // --- Touch and Mouse Controls ---
     const touchLeft = document.getElementById('touch-left');
     const touchRight = document.getElementById('touch-right');
     const touchLaunch = document.getElementById('touch-launch');
 
     const handleControlStart = (type) => {
+        // MODIFIED: Player flipper input cancels bot mode
+        if (botModeActive && (type === 'left' || type === 'right')) {
+            cancelBotMode();
+        }
+
         if (showHelp || gameState === 'gameOver') return;
         switch(type) {
             case 'left':
@@ -340,36 +385,25 @@ document.addEventListener('DOMContentLoaded', () => {
     function update() {
         if (showHelp || gameState === 'gameOver') return;
 
-        // --- ADDED: Bot Mode Logic ---
+        // MODIFIED: Bot Mode Logic
         if (botModeActive) {
             let activateLeft = false;
             let activateRight = false;
-
-            // The Y-coordinate where the bot becomes interested in the ball
             const triggerY = leftFlipper.y - 15;
-            // The Y-coordinate below which the bot loses interest
             const bottomY = leftFlipper.y + 20;
 
             for (const ball of balls) {
-                // Check if the ball is in play, moving down, and in the vertical danger zone
                 if (ball.state === 'playing' && ball.vy >= 0 && ball.y > triggerY && ball.y < bottomY) {
-                    
-                    // --- Left Flipper Logic ---
-                    // Define the horizontal area for the left flipper
                     const leftFlipperTipX = leftFlipper.x + FLIPPER_LENGTH * Math.cos(leftFlipper.baseAngle);
                     if (ball.x < leftFlipperTipX + ball.radius) {
                         activateLeft = true;
                     }
-                    
-                    // --- Right Flipper Logic ---
-                    // Define the horizontal area for the right flipper
                     const rightFlipperTipX = rightFlipper.x + FLIPPER_LENGTH * Math.cos(rightFlipper.baseAngle);
                     if (ball.x > rightFlipperTipX - ball.radius) {
                         activateRight = true;
                     }
                 }
             }
-            // Bot takes over control of the flippers
             leftFlipper.active = activateLeft;
             rightFlipper.active = activateRight;
         }
@@ -532,11 +566,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function endGame() {
-        // ADDED: Stop any bot timers
+        // MODIFIED: Stop all bot timers on game over
         clearTimeout(botActivationTimer);
         clearInterval(botCountdownInterval);
+        clearTimeout(botLaunchTimerId);
         botActivationTimer = null;
         botCountdownInterval = null;
+        botLaunchTimerId = null;
 
         gameState = 'gameOver';
         finalScoreEl.textContent = score;
@@ -559,12 +595,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         
-        // Draw Slopes
         ctx.strokeStyle = mainColor; ctx.lineWidth = 4; ctx.shadowColor = mainColor; ctx.shadowBlur = 5;
         slopes.forEach(slope => { ctx.beginPath(); ctx.moveTo(slope.x1, slope.y1); ctx.lineTo(slope.x2, slope.y2); ctx.stroke(); });
         ctx.shadowBlur = 0;
 
-        // Draw Bumpers
         bumpers.forEach(bumper => {
             ctx.beginPath(); ctx.arc(bumper.x, bumper.y, bumper.radius, 0, Math.PI * 2);
             ctx.fillStyle = mainColor; ctx.shadowColor = mainColor; ctx.shadowBlur = 10;
@@ -572,7 +606,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         ctx.shadowBlur = 0;
 
-        // Draw Flippers
         function drawFlipper(flipper) {
             ctx.save();
             ctx.translate(flipper.x, flipper.y); ctx.rotate(flipper.angle);
@@ -584,7 +617,6 @@ document.addEventListener('DOMContentLoaded', () => {
         drawFlipper(leftFlipper);
         drawFlipper(rightFlipper);
         
-        // Draw Launcher and Chute
         ctx.fillStyle = isLightMode ? '#ddd' : '#222';
         ctx.fillRect(PLAYFIELD_WIDTH, 0, CHUTE_WIDTH, CANVAS_HEIGHT);
         ctx.strokeStyle = mainColor; ctx.lineWidth = 2;
@@ -594,9 +626,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.fillStyle = isLightMode ? '#aaa' : '#ccc';
         ctx.fillRect(launcher.x - launcher.width / 2, plungerY, launcher.width, launcher.height);
         
-        // Draw Balls
         balls.forEach(ball => {
-            // Only draw balls that are in the launcher or on the playfield
             if (ball.state === 'ready' || ball.state === 'launching' || ball.state === 'playing') {
                 ctx.beginPath();
                 ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
@@ -610,6 +640,26 @@ document.addEventListener('DOMContentLoaded', () => {
         if (gameState === 'launch' && launcher.charging) {
             ctx.fillStyle = isLightMode ? 'rgba(255, 100, 0, 0.7)' : 'rgba(255, 255, 0, 0.7)';
             ctx.fillRect(launcher.x + launcher.width, launcher.y, 5, -launcher.power * (150 / launcher.maxPower));
+        }
+
+        // ADDED: Draw "BOT MODE ACTIVE" text on the canvas
+        if (botModeActive) {
+            ctx.save();
+            ctx.font = 'bold 50px "Courier New", Courier, monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowBlur = 5;
+
+            if (isLightMode) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
+            } else {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+            }
+            
+            ctx.fillText('BOT MODE ACTIVE', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+            ctx.restore();
         }
     }
 
