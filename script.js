@@ -61,7 +61,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Sound Effects ---
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
-    // ADDED: Function to unlock audio on user interaction
     function unlockAudio() {
         if (audioCtx && audioCtx.state === 'suspended') {
             audioCtx.resume();
@@ -70,8 +69,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function playSound(type, volume = 0.3) {
         if (isMuted || !audioCtx) return;
-        // The unlockAudio() function called on user gestures handles resuming the context.
-        // This function can now proceed as normal.
         const oscillator = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
         oscillator.connect(gainNode);
@@ -215,7 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function toggleBotMode() {
-        unlockAudio(); // Also unlock if user manually toggles bot mode
+        unlockAudio();
         botModeActive = !botModeActive;
         if (botActivationTimer) clearTimeout(botActivationTimer);
         if (botCountdownInterval) clearInterval(botCountdownInterval);
@@ -252,8 +249,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Event Listeners ---
+    // ADDED: Unlock audio when the mouse enters the canvas area.
+    canvas.addEventListener('mouseenter', unlockAudio);
+
     window.addEventListener('keydown', (e) => {
-        // Any keydown is a user gesture, good place to unlock audio
         unlockAudio(); 
 
         if (botModeActive && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
@@ -297,7 +296,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // MODIFIED: Added unlockAudio() to user-initiated events
     restartButton.addEventListener('click', () => {
         unlockAudio();
         initializeGame();
@@ -340,7 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const touchLaunch = document.getElementById('touch-launch');
 
     const handleControlStart = (type) => {
-        unlockAudio(); // Unlock audio on any touch/mouse interaction
+        unlockAudio();
 
         if (botModeActive && (type === 'left' || type === 'right')) {
             cancelBotMode();
