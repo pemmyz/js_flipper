@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const gapButton = document.getElementById('gap-button');
     const helpToggleButton = document.getElementById('help-toggle-button');
     const themeToggleButton = document.getElementById('theme-toggle-button');
+    const botStatusText = document.getElementById('bot-status-text'); // ADDED: Bot status element
 
     // --- Game State and Constants ---
     let score = 0;
@@ -28,6 +29,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let isMuted = false;
     let flipperGapBetweenTips;
     
+    // --- BOT MODE STATE ---
+    let botModeActive = false;
+    let botActivationTimer = null;
+    let botCountdownInterval = null;
+
     let chuteBecameEmptyAt = null;
     const AUTO_SERVE_DELAY = 5000;
 
@@ -84,6 +90,12 @@ document.addEventListener('DOMContentLoaded', () => {
         chuteBecameEmptyAt = null;
         flipperGapBetweenTips = (BALL_RADIUS * 2 + 5) + (BALL_RADIUS / 2);
         
+        // --- BOT MODE INITIALIZATION ---
+        botModeActive = false;
+        clearTimeout(botActivationTimer);
+        clearInterval(botCountdownInterval);
+        startBotCountdown(); // Start the 5-second activation process
+
         helpLegend.classList.add('hidden');
         gameOverScreen.classList.add('hidden');
         balls = [];
@@ -156,6 +168,47 @@ document.addEventListener('DOMContentLoaded', () => {
         helpLegend.classList.toggle('hidden');
     }
 
+    // --- BOT MODE FUNCTIONS ---
+    function startBotCountdown() {
+        if (!botStatusText) return;
+        let countdown = 5;
+        botStatusText.textContent = `Bot mode starts in: ${countdown}s`;
+        
+        botCountdownInterval = setInterval(() => {
+            countdown--;
+            if (countdown > 0) {
+                botStatusText.textContent = `Bot mode starts in: ${countdown}s`;
+            } else {
+                botStatusText.textContent = `Bot mode starting...`;
+                clearInterval(botCountdownInterval);
+                botCountdownInterval = null;
+            }
+        }, 1000);
+        
+        botActivationTimer = setTimeout(() => {
+            if (gameState !== 'gameOver') { 
+                botModeActive = true;
+                updateBotStatusText();
+            }
+            botActivationTimer = null;
+        }, 5000);
+    }
+
+    function toggleBotMode() {
+        botModeActive = !botModeActive;
+        // Stop the auto-activation process if the user toggles manually
+        if (botActivationTimer) clearTimeout(botActivationTimer);
+        if (botCountdownInterval) clearInterval(botCountdownInterval);
+        botActivationTimer = null;
+        botCountdownInterval = null;
+        updateBotStatusText();
+    }
+
+    function updateBotStatusText() {
+        if (!botStatusText) return;
+        botStatusText.textContent = `Bot Mode: ${botModeActive ? 'ON' : 'OFF'}`;
+    }
+
     // --- Event Listeners ---
     window.addEventListener('keydown', (e) => {
         if (e.code === 'KeyH') {
@@ -164,6 +217,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (e.code === 'KeyM') {
             muteButton.click();
+            return;
+        }
+        if (e.code === 'KeyB') { // ADDED: Bot toggle key
+            toggleBotMode();
             return;
         }
         if (showHelp || gameState === 'gameOver') return;
@@ -282,6 +339,41 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Main Game Loop Functions ---
     function update() {
         if (showHelp || gameState === 'gameOver') return;
+
+        // --- ADDED: Bot Mode Logic ---
+        if (botModeActive) {
+            let activateLeft = false;
+            let activateRight = false;
+
+            // The Y-coordinate where the bot becomes interested in the ball
+            const triggerY = leftFlipper.y - 15;
+            // The Y-coordinate below which the bot loses interest
+            const bottomY = leftFlipper.y + 20;
+
+            for (const ball of balls) {
+                // Check if the ball is in play, moving down, and in the vertical danger zone
+                if (ball.state === 'playing' && ball.vy >= 0 && ball.y > triggerY && ball.y < bottomY) {
+                    
+                    // --- Left Flipper Logic ---
+                    // Define the horizontal area for the left flipper
+                    const leftFlipperTipX = leftFlipper.x + FLIPPER_LENGTH * Math.cos(leftFlipper.baseAngle);
+                    if (ball.x < leftFlipperTipX + ball.radius) {
+                        activateLeft = true;
+                    }
+                    
+                    // --- Right Flipper Logic ---
+                    // Define the horizontal area for the right flipper
+                    const rightFlipperTipX = rightFlipper.x + FLIPPER_LENGTH * Math.cos(rightFlipper.baseAngle);
+                    if (ball.x > rightFlipperTipX - ball.radius) {
+                        activateRight = true;
+                    }
+                }
+            }
+            // Bot takes over control of the flippers
+            leftFlipper.active = activateLeft;
+            rightFlipper.active = activateRight;
+        }
+
         updateFlipper(leftFlipper);
         updateFlipper(rightFlipper);
         for (let i = balls.length - 1; i >= 0; i--) {
@@ -440,6 +532,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function endGame() {
+        // ADDED: Stop any bot timers
+        clearTimeout(botActivationTimer);
+        clearInterval(botCountdownInterval);
+        botActivationTimer = null;
+        botCountdownInterval = null;
+
         gameState = 'gameOver';
         finalScoreEl.textContent = score;
         gameOverScreen.classList.remove('hidden');
