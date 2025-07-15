@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const BOUNCE_FACTOR = 0.6;
     const BALL_RADIUS = 10;
     const BUMPER_RADIUS = 10;
+    const SLOPE_LINE_WIDTH = 12; // MODIFIED: For fatter slopes
 
     const CHUTE_WIDTH = 50;
     const PLAYFIELD_WIDTH = CANVAS_WIDTH - CHUTE_WIDTH;
@@ -52,6 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const FLIPPER_LENGTH = 85;
     const FLIPPER_REST_ANGLE = Math.PI / 8;
     const FLIPPER_SWING_ANGLE = Math.PI / 3;
+    const INITIAL_FLIPPER_GAP = (BALL_RADIUS * 2 + 5) + (BALL_RADIUS / 2); // NEW: Store initial gap
 
     // --- Anti-stuck constants for flippers ---
     const FLIPPER_ANTI_STUCK_BOOST = 10; 
@@ -96,7 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState = 'launch';
         showHelp = false;
         chuteBecameEmptyAt = null;
-        flipperGapBetweenTips = (BALL_RADIUS * 2 + 5) + (BALL_RADIUS / 2);
+        flipperGapBetweenTips = INITIAL_FLIPPER_GAP; // MODIFIED: Use initial gap constant
         
         botModeActive = false;
         clearTimeout(botActivationTimer);
@@ -249,7 +251,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Event Listeners ---
-    // ADDED: Unlock audio when the mouse enters the canvas area.
     canvas.addEventListener('mouseenter', unlockAudio);
 
     window.addEventListener('keydown', (e) => {
@@ -339,33 +340,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const handleControlStart = (type) => {
         unlockAudio();
-
-        if (botModeActive && (type === 'left' || type === 'right')) {
-            cancelBotMode();
-        }
-
+        if (botModeActive && (type === 'left' || type === 'right')) { cancelBotMode(); }
         if (showHelp || gameState === 'gameOver') return;
         switch(type) {
-            case 'left':
-                leftFlipper.active = true;
-                break;
-            case 'right':
-                rightFlipper.active = true;
-                break;
-            case 'launch':
-                if (gameState === 'launch') launcher.charging = true;
-                break;
+            case 'left': leftFlipper.active = true; break;
+            case 'right': rightFlipper.active = true; break;
+            case 'launch': if (gameState === 'launch') launcher.charging = true; break;
         }
     };
 
     const handleControlEnd = (type) => {
         switch(type) {
-            case 'left':
-                leftFlipper.active = false;
-                break;
-            case 'right':
-                rightFlipper.active = false;
-                break;
+            case 'left': leftFlipper.active = false; break;
+            case 'right': rightFlipper.active = false; break;
             case 'launch':
                 if (gameState === 'launch' && launcher.charging) {
                     launcher.charging = false;
@@ -382,16 +369,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function setupControlEvents(element, type) {
         ['touchstart', 'mousedown'].forEach(evt => {
-            element.addEventListener(evt, e => {
-                e.preventDefault();
-                handleControlStart(type);
-            });
+            element.addEventListener(evt, e => { e.preventDefault(); handleControlStart(type); });
         });
         ['touchend', 'touchcancel', 'mouseup', 'mouseleave'].forEach(evt => {
-            element.addEventListener(evt, e => {
-                e.preventDefault();
-                handleControlEnd(type);
-            });
+            element.addEventListener(evt, e => { e.preventDefault(); handleControlEnd(type); });
         });
     }
 
@@ -404,7 +385,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function update() {
         if (showHelp || gameState === 'gameOver') return;
 
+        // BOT MODE LOGIC
         if (botModeActive) {
+            // Flipper AI
             let activateLeft = false;
             let activateRight = false;
             const triggerY = leftFlipper.y - 15;
@@ -413,28 +396,31 @@ document.addEventListener('DOMContentLoaded', () => {
             for (const ball of balls) {
                 if (ball.state === 'playing' && ball.vy >= 0 && ball.y > triggerY && ball.y < bottomY) {
                     const leftFlipperTipX = leftFlipper.x + FLIPPER_LENGTH * Math.cos(leftFlipper.baseAngle);
-                    if (ball.x < leftFlipperTipX + ball.radius) {
-                        activateLeft = true;
-                    }
+                    if (ball.x < leftFlipperTipX + ball.radius) { activateLeft = true; }
                     const rightFlipperTipX = rightFlipper.x + FLIPPER_LENGTH * Math.cos(rightFlipper.baseAngle);
-                    if (ball.x > rightFlipperTipX - ball.radius) {
-                        activateRight = true;
-                    }
+                    if (ball.x > rightFlipperTipX - ball.radius) { activateRight = true; }
                 }
             }
             leftFlipper.active = activateLeft;
             rightFlipper.active = activateRight;
+            
+            // NEW: Widen gap based on score
+            const expectedGap = INITIAL_FLIPPER_GAP + Math.floor(score / 500);
+            if (flipperGapBetweenTips < expectedGap) {
+                flipperGapBetweenTips = expectedGap;
+                createFlippers();
+                createSlopes();
+            }
         }
 
         updateFlipper(leftFlipper);
         updateFlipper(rightFlipper);
+        
         for (let i = balls.length - 1; i >= 0; i--) {
             const ball = balls[i];
             switch (ball.state) {
                 case 'ready':
-                    if (launcher.charging && launcher.power < launcher.maxPower) {
-                        launcher.power += 1;
-                    }
+                    if (launcher.charging && launcher.power < launcher.maxPower) { launcher.power += 1; }
                     ball.y = launcher.y - launcher.power;
                     break;
                 case 'launching':
@@ -446,10 +432,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         ball.vx = -4;
                         prepareNextBall();
                     }
-                    if (ball.y > CANVAS_HEIGHT) {
-                        ballsLeft++;
-                        balls.splice(i, 1);
-                    }
+                    if (ball.y > CANVAS_HEIGHT) { ballsLeft++; balls.splice(i, 1); }
                     break;
                 case 'playing':
                     ball.vy += GRAVITY;
@@ -476,12 +459,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     handleFlipperCollision(ball, leftFlipper);
                     handleFlipperCollision(ball, rightFlipper);
                     handleSlopeCollisions(ball);
-                    if (ball.y > CANVAS_HEIGHT) {
-                        balls.splice(i, 1);
-                    }
+                    if (ball.y > CANVAS_HEIGHT) { balls.splice(i, 1); }
                     break;
             }
         }
+        
+        // NEW: Handle collisions between balls
+        handleBallToBallCollisions();
+
         const isChuteReady = balls.some(b => b.state === 'ready');
         const hasBallInPlay = balls.some(b => b.state === 'playing');
         if (!isChuteReady && hasBallInPlay && ballsLeft > 0 && chuteBecameEmptyAt === null) {
@@ -512,6 +497,54 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    // NEW: Handles collisions between any two balls
+    function handleBallToBallCollisions() {
+        for (let i = 0; i < balls.length; i++) {
+            for (let j = i + 1; j < balls.length; j++) {
+                const ballA = balls[i];
+                const ballB = balls[j];
+
+                // Only collide balls that are actively in the playfield
+                if (ballA.state !== 'playing' || ballB.state !== 'playing') continue;
+
+                const dx = ballB.x - ballA.x;
+                const dy = ballB.y - ballA.y;
+                const distance = Math.hypot(dx, dy);
+                const minDistance = ballA.radius + ballB.radius;
+
+                if (distance < minDistance) {
+                    playSound('bounce', 0.2);
+                    // 1. Resolve overlap
+                    const overlap = (minDistance - distance) / 2;
+                    const nx = dx / distance;
+                    const ny = dy / distance;
+                    ballA.x -= nx * overlap;
+                    ballA.y -= ny * overlap;
+                    ballB.x += nx * overlap;
+                    ballB.y += ny * overlap;
+
+                    // 2. Elastic collision response (for equal mass balls)
+                    const tx = -ny;
+                    const ty = nx;
+
+                    const dpTanA = ballA.vx * tx + ballA.vy * ty;
+                    const dpTanB = ballB.vx * tx + ballB.vy * ty;
+                    const dpNormA = ballA.vx * nx + ballA.vy * ny;
+                    const dpNormB = ballB.vx * nx + ballB.vy * ny;
+                    
+                    // New normal velocities after collision
+                    const vNormA_new = dpNormB;
+                    const vNormB_new = dpNormA;
+                    
+                    ballA.vx = tx * dpTanA + nx * vNormA_new;
+                    ballA.vy = ty * dpTanA + ny * vNormA_new;
+                    ballB.vx = tx * dpTanB + nx * vNormB_new;
+                    ballB.vy = ty * dpTanB + ny * vNormB_new;
+                }
+            }
+        }
+    }
+
     function handleFlipperCollision(ball, flipper) {
         const targetAngle = flipper.active ? flipper.activeAngle : flipper.baseAngle;
         const x1 = flipper.x, y1 = flipper.y;
@@ -550,10 +583,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // MODIFIED: Slope collision uses a "capsule" model for robustness
     function handleSlopeCollisions(ball) {
         const ANTI_STUCK_BOOST = 6;
         const ANTI_STUCK_COUNT = 5;
         const ANTI_STUCK_TIME_WINDOW = 1000;
+        const slopeRadius = SLOPE_LINE_WIDTH / 2; // Physical radius of the slope line
+
         slopes.forEach(slope => {
             const dx = slope.x2 - slope.x1; const dy = slope.y2 - slope.y1;
             const lineLengthSq = dx * dx + dy * dy;
@@ -561,9 +597,10 @@ document.addEventListener('DOMContentLoaded', () => {
             t = Math.max(0, Math.min(1, t));
             const closestX = slope.x1 + t * dx; const closestY = slope.y1 + t * dy;
             const dist = Math.hypot(ball.x - closestX, ball.y - closestY);
-            if (dist < ball.radius) {
+            
+            if (dist < ball.radius + slopeRadius) { // Check collision with the fatter slope
                 playSound('bounce', 0.4);
-                const overlap = ball.radius - dist;
+                const overlap = (ball.radius + slopeRadius) - dist;
                 const normalX = ball.x - closestX; const normalY = ball.y - closestY;
                 const magnitude = Math.hypot(normalX, normalY) || 1;
                 const nx = normalX / magnitude; const ny = normalY / magnitude;
@@ -612,9 +649,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         
-        ctx.strokeStyle = mainColor; ctx.lineWidth = 4; ctx.shadowColor = mainColor; ctx.shadowBlur = 5;
+        // MODIFIED: Draw slopes 3x fatter
+        ctx.strokeStyle = mainColor; ctx.lineWidth = SLOPE_LINE_WIDTH; ctx.shadowColor = mainColor; ctx.shadowBlur = 10;
+        ctx.lineCap = 'round'; // Makes the ends of the fat lines rounded
         slopes.forEach(slope => { ctx.beginPath(); ctx.moveTo(slope.x1, slope.y1); ctx.lineTo(slope.x2, slope.y2); ctx.stroke(); });
-        ctx.shadowBlur = 0;
+        ctx.shadowBlur = 0; ctx.lineCap = 'butt';
 
         bumpers.forEach(bumper => {
             ctx.beginPath(); ctx.arc(bumper.x, bumper.y, bumper.radius, 0, Math.PI * 2);
